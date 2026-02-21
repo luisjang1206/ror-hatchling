@@ -1,0 +1,6 @@
+# Claude Code local config
+.claude/
+.mcp.json
+
+# Task manager data
+shrimp_data/
