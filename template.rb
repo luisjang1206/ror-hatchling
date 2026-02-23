@@ -85,24 +85,69 @@ say_phase 1, "Foundation"
 say_step 1, "Gemfile 수정"
 
 # Ruby 버전 제약 추가 (Ruby 4.0 자동 업그레이드 방지)
-# TODO: Phase 1 구현 시 — rails new가 ruby 버전을 이미 기재하는지 확인 후 조건 분기
-inject_into_file "Gemfile", before: /^source/ do
+# 검증 결과: rails new는 Gemfile에 ruby 지시문 미생성 (.ruby-version만 생성)
+# TSD 2.1절: ruby "~> 3.4" 지정으로 4.0 업그레이드 방지
+inject_into_file "Gemfile", after: /^source "https:\/\/rubygems\.org"\n/ do
   <<~RUBY
+
     ruby "~> 3.4"
+  RUBY
+end
+
+# 불필요 gem 제거 (TSD 미포함)
+# jbuilder: API JSON 빌더, 본 보일러플레이트에서 불필요
+# image_processing: S3 파일 업로드 미사용 (PRD Out of Scope)
+# 주석 라인 + gem 라인 + 후행 빈 줄까지 함께 제거
+gsub_file "Gemfile", /# Build JSON APIs.*\n.*gem "jbuilder".*\n\n?/, ""
+gsub_file "Gemfile", /# Use Active Storage variants.*\n.*gem "image_processing".*\n\n?/, ""
+
+# 외부 Gems 추가 (TSD 4.2절 — 4개 제한)
+# gem 메서드는 Gemfile 맨 아래에 추가하므로, inject_into_file로 group 블록 앞에 배치
+inject_into_file "Gemfile", before: /^group :development, :test/ do
+  <<~RUBY
+    # Authorization & Utilities (TSD 4.2 — external gems, max 4)
+    gem "pundit", "~> 2.5"
+    gem "pagy", "~> 43.0"
+    gem "lograge", "~> 0.14"
+    gem "view_component", "~> 4.4"
 
   RUBY
 end
 
-# 외부 Gems 추가 (TSD 4.2절 — 4개 제한)
-gem "pundit", "~> 2.5"
-gem "pagy", "~> 43.0"
-gem "lograge", "~> 0.14"
-gem "view_component", "~> 4.4"
+# bcrypt 주석 해제 + TSD 버전 핀 적용 (TSD 4.1절: ~> 3.1)
+# 검증 결과: rails new 기본은 `# gem "bcrypt", "~> 3.1.7"` (주석 처리 상태)
+gsub_file "Gemfile", /^# gem "bcrypt".*$/, 'gem "bcrypt", "~> 3.1"'
 
-# TODO: Phase 1 구현 시 — rails new 기본 Gemfile의 버전 핀을 TSD 기준으로 교정
-# gsub_file "Gemfile", /gem "pg".*$/, 'gem "pg", "~> 1.5"'
-# gsub_file "Gemfile", /gem "puma".*$/, 'gem "puma", "~> 6.5"'
-# ... 등 TSD 4.4절 전체 Gemfile과 대조하여 누락/차이 교정
+# 기존 Gem 버전 핀 교정 (TSD 4.4절 Gemfile 전체와 일치시킴)
+# Core
+gsub_file "Gemfile", /gem "rails",\s*"~> 8\.1\.\d+"/, 'gem "rails", "~> 8.1"'
+gsub_file "Gemfile", /gem "pg",\s*"~> 1\.1"/, 'gem "pg", "~> 1.5"'
+gsub_file "Gemfile", /gem "puma",\s*">= 5\.0"/, 'gem "puma", "~> 6.5"'
+
+# Frontend (버전 미지정 → TSD 버전 추가)
+gsub_file "Gemfile", /^gem "propshaft"$/, 'gem "propshaft", "~> 1.1"'
+gsub_file "Gemfile", /^gem "importmap-rails"$/, 'gem "importmap-rails", "~> 2.1"'
+gsub_file "Gemfile", /^gem "turbo-rails"$/, 'gem "turbo-rails", "~> 2.0"'
+gsub_file "Gemfile", /^gem "stimulus-rails"$/, 'gem "stimulus-rails", "~> 1.3"'
+gsub_file "Gemfile", /^gem "tailwindcss-rails"$/, 'gem "tailwindcss-rails", "~> 4.2"'
+
+# Infrastructure — Solid Stack (버전 미지정 → TSD 버전 추가)
+gsub_file "Gemfile", /^gem "solid_cache"$/, 'gem "solid_cache", "~> 1.0"'
+gsub_file "Gemfile", /^gem "solid_queue"$/, 'gem "solid_queue", "~> 1.3"'
+gsub_file "Gemfile", /^gem "solid_cable"$/, 'gem "solid_cable", "~> 3.0"'
+
+# Deployment (버전 미지정 → TSD 버전 추가)
+gsub_file "Gemfile", /^gem "kamal", require: false$/, 'gem "kamal", "~> 2.10", require: false'
+gsub_file "Gemfile", /^gem "thruster", require: false$/, 'gem "thruster", "~> 0.1", require: false'
+
+# Dev/Test gems 버전 핀 교정 (TSD 4.3절)
+gsub_file "Gemfile", /gem "debug", platforms:/, 'gem "debug", "~> 1.9", platforms:'
+gsub_file "Gemfile", /^  gem "brakeman", require: false$/, '  gem "brakeman", "~> 7.0", require: false'
+gsub_file "Gemfile", /^  gem "rubocop-rails-omakase", require: false$/, '  gem "rubocop-rails-omakase", "~> 1.0", require: false'
+
+# Test gems 버전 핀 교정
+gsub_file "Gemfile", /^  gem "capybara"$/, '  gem "capybara", "~> 3.40"'
+gsub_file "Gemfile", /^  gem "selenium-webdriver"$/, '  gem "selenium-webdriver", "~> 4.27"'
 
 # ============================================================================
 # after_bundle 블록
@@ -115,18 +160,36 @@ after_bundle do
 
   # == Step 11: database.yml 멀티DB 설정 ======================================
   # Rails 8.1 rails new는 production만 멀티DB 자동 설정.
-  # development/test에도 멀티DB를 추가해야 함.
+  # development/test에도 멀티DB를 추가해야 함 (PRD 2.5절).
   # 검증 결과: pool: → max_connections: 키 변경 (Rails 8.1)
   # 검증 결과: Solid Stack install은 database.yml 미수정 (R1 리스크 해소)
+  #
+  # 구조: 3환경(dev/test/prod) x 4DB(primary/queue/cache/cable) = 12 논리 DB
+  # YAML 앵커: &primary_dev, &primary_test, &primary_prod
+  # ERB 참고: create_file 블록은 ERB 미처리. <%= %> 가 파일에 그대로 출력되며,
+  #   Rails가 database.yml 로드 시 ERB 파싱하여 ENV 값을 평가함.
+  #   따라서 <%%= %> (double %) 아닌 <%= %> (single %) 사용이 올바름.
   # ==========================================================================
 
   say_step 11, "database.yml 멀티DB 설정"
 
   create_file "config/database.yml", force: true do
     <<~YAML
+      # PostgreSQL Multi-DB Configuration (PRD 2.5)
+      # Single PostgreSQL server with 4 logical databases: primary, queue, cache, cable
+      # https://guides.rubyonrails.org/active_record_multiple_databases.html
+      #
+      # Migration directories:
+      #   primary -> db/migrate/
+      #   queue   -> db/queue_migrate/
+      #   cache   -> db/cache_migrate/
+      #   cable   -> db/cable_migrate/
+
       default: &default
         adapter: postgresql
         encoding: unicode
+        # For details on connection pooling, see Rails configuration guide
+        # https://guides.rubyonrails.org/configuring.html#database-pooling
         max_connections: <%= ENV.fetch("RAILS_MAX_THREADS") { 5 } %>
 
       development:
@@ -167,7 +230,8 @@ after_bundle do
         primary: &primary_prod
           <<: *default
           database: #{app_name}_production
-          username: <%= ENV["DB_USER"] || "appuser" %>
+          host: <%= ENV.fetch("DB_HOST", "localhost") %>
+          username: <%= ENV.fetch("DB_USER", "#{app_name}") %>
           password: <%= ENV["DB_PASSWORD"] %>
         queue:
           <<: *primary_prod
@@ -195,11 +259,14 @@ after_bundle do
     app/policies/.keep
     app/components/.keep
     db/seeds/.keep
+    db/cache_migrate/.keep
+    db/queue_migrate/.keep
+    db/cable_migrate/.keep
   ].each { |path| create_file path }
 
-  # NOTE: db/queue_migrate, db/cache_migrate, db/cable_migrate는
-  # Solid Stack 자동 설치 시 schema 파일로 생성되므로 .keep 불필요.
-  # Rails 8.1 rails new가 Solid Stack을 자동 설치함.
+  # NOTE: rails new는 Solid Stack 자동 설치 시 db/*_schema.rb만 생성하고
+  # db/*_migrate/ 디렉토리는 생성하지 않음. database.yml의 migrations_paths가
+  # 참조하는 디렉토리이므로 .keep 파일로 확보 필요.
 
   # == Step 14: Procfile.dev 수정 =============================================
   # rails new -c tailwind 기본 생성: web + css (2프로세스)
@@ -209,35 +276,31 @@ after_bundle do
 
   say_step 14, "Procfile.dev 수정"
 
-  # TODO: Phase 1 구현 시 — rails new가 생성하는 Procfile.dev의 정확한 내용 확인 후
-  # gsub_file 또는 create_file force:true 결정
-  # 예상 내용:
-  # create_file "Procfile.dev", force: true do
-  #   <<~PROCFILE
-  #     web: bin/rails server -p 3000
-  #     css: bin/rails tailwindcss:watch
-  #     jobs: bin/jobs
-  #   PROCFILE
-  # end
+  # rails new -c tailwind 기본 Procfile.dev: web + css
+  # append_to_file로 기존 내용 보존 + jobs만 추가 (최소 변경 원칙)
+  append_to_file "Procfile.dev", "jobs: bin/jobs\n"
 
   # == Step 1 (계속): 환경 설정 파일 ==========================================
 
   say_step "1b", "환경 설정 파일"
 
-  # TODO: Phase 1 구현 시 — .env.example 생성
-  # create_file ".env.example" do
-  #   <<~ENV
-  #     # Database
-  #     DATABASE_URL=postgres://localhost/#{app_name}_development
-  #     DB_USER=postgres
-  #     DB_PASSWORD=
-  #     # Rails
-  #     RAILS_MAX_THREADS=5
-  #     # Admin seed
-  #     ADMIN_EMAIL=admin@example.com
-  #     ADMIN_PASSWORD=changeme123
-  #   ENV
-  # end
+  create_file ".env.example" do
+    <<~ENV
+      # Database
+      DB_USER=postgres
+      DB_PASSWORD=
+
+      # Rails
+      RAILS_MAX_THREADS=5
+
+      # Admin seed (Phase 4에서 사용)
+      ADMIN_EMAIL=admin@example.com
+      ADMIN_PASSWORD=changeme123
+    ENV
+  end
+
+  # .gitignore에 .env 추가 (rails new가 이미 생성한 .gitignore에 추가)
+  append_to_file ".gitignore", "\n# Environment variables\n.env\n.env.local\n"
 
   # -------------------------------------------------------------------------
   # Phase 2: Authentication & User Model
