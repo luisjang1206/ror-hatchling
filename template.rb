@@ -1447,76 +1447,375 @@ after_bundle do
 
   say_step 17, "Pundit, Pagy, Lograge 초기 설정"
 
-  # Pundit 설치
-  # TODO: Phase 4 구현 시 — generate 실행 및 ApplicationController에 include 추가
-  # generate "pundit:install"
-  # inject_into_file "app/controllers/application_controller.rb",
-  #   after: "  include Authentication\n" do
-  #   "  include Pundit::Authorization\n"
-  # end
+  # Pundit 설치 — ApplicationPolicy 자동 생성 (app/policies/application_policy.rb)
+  generate "pundit:install"
 
-  # TODO: Phase 4 구현 시 — UserPolicy 생성
-  # create_file "app/policies/user_policy.rb" do ... end
+  # ApplicationController에 Pundit::Authorization include
+  # Phase 3에서 동일 앵커로 rescue_from 주입 완료 → Phase 4 inject는 앞에 위치 (의도된 순서)
+  inject_into_file "app/controllers/application_controller.rb",
+    after: "  include Authentication\n" do
+    "  include Pundit::Authorization\n"
+  end
 
-  # TODO: Phase 4 구현 시 — Pagy initializer
-  # create_file "config/initializers/pagy.rb" do
-  #   <<~'RUBY'
-  #     Pagy::DEFAULT[:limit] = 25
-  #   RUBY
-  # end
-  # ApplicationController에 include Pagy::Backend
-  # ApplicationHelper에 include Pagy::Frontend
+  # UserPolicy — PRD 2.2 인가 정책 기반
+  # Role enum: { user: 0, admin: 1, super_admin: 2 } (Phase 2에서 정의)
+  create_file "app/policies/user_policy.rb", <<~'RUBY'
+    # frozen_string_literal: true
 
-  # TODO: Phase 4 구현 시 — Lograge initializer
-  # create_file "config/initializers/lograge.rb" do
-  #   <<~'RUBY'
-  #     Rails.application.configure do
-  #       config.lograge.enabled = true
-  #       config.lograge.formatter = Lograge::Formatters::Json.new
-  #       config.lograge.custom_payload do |controller|
-  #         {
-  #           user_id: controller.try(:current_user)&.id,
-  #           request_id: controller.request.request_id
-  #         }
-  #       end
-  #     end
-  #   RUBY
-  # end
+    class UserPolicy < ApplicationPolicy
+      # 사용자 목록: 관리자만 접근
+      def index?
+        user.admin? || user.super_admin?
+      end
+
+      # 사용자 상세: 자기 자신 + 관리자
+      def show?
+        user == record || user.admin? || user.super_admin?
+      end
+
+      # 사용자 수정: 자기 자신 + 슈퍼관리자
+      def update?
+        user == record || user.super_admin?
+      end
+
+      # 역할 변경: 슈퍼관리자만
+      def change_role?
+        user.super_admin?
+      end
+
+      class Scope < ApplicationPolicy::Scope
+        def resolve
+          if user.admin? || user.super_admin?
+            scope.all
+          else
+            scope.where(id: user.id)
+          end
+        end
+      end
+    end
+  RUBY
+
+  # Pagy 43+ 이니셜라이저 — Pagy.options API 사용 (Pagy::DEFAULT 아님)
+  create_file "config/initializers/pagy.rb", <<~'RUBY'
+    # frozen_string_literal: true
+
+    # Pagy 43+ configuration
+    # API 변경: Pagy::DEFAULT → Pagy.options, :items → :limit, :size → :slots
+    Pagy.options[:limit] = 25
+    Pagy.options[:slots] = [1, 4, 4, 1]
+    Pagy.options[:page_key] = "page"
+
+    # 런타임 설정 변경 방지
+    Pagy.options.freeze
+  RUBY
+
+  # ApplicationController에 Pagy::Backend include
+  inject_into_file "app/controllers/application_controller.rb",
+    after: "  include Pundit::Authorization\n" do
+    "  include Pagy::Backend\n"
+  end
+
+  # ApplicationHelper에 Pagy::Frontend include
+  inject_into_file "app/helpers/application_helper.rb",
+    after: "module ApplicationHelper\n" do
+    "  include Pagy::Frontend\n"
+  end
+
+  # Lograge 0.14 — 구조화된 JSON 로그 출력 (PRD 2.9)
+  # ROADMAP 4-4 결정: production 환경만 활성화 + ENV 플래그
+  create_file "config/initializers/lograge.rb", <<~'RUBY'
+    # frozen_string_literal: true
+
+    Rails.application.configure do
+      # production 환경 기본 활성화, 다른 환경은 ENV 플래그로 활성화 가능
+      config.lograge.enabled = Rails.env.production? || ENV["LOGRAGE_ENABLED"].present?
+
+      # JSON 포맷 — 구조화된 로그 분석에 적합
+      config.lograge.formatter = Lograge::Formatters::Json.new
+
+      # 요청별 커스텀 페이로드: 사용자 ID, 요청 ID, 클라이언트 IP
+      config.lograge.custom_payload do |controller|
+        {
+          user_id: controller.current_user&.id,
+          request_id: controller.request.request_id,
+          remote_ip: controller.request.remote_ip
+        }
+      end
+
+      # Health check 엔드포인트 로그 제외 (노이즈 감소)
+      # /up (liveness)은 Rails::HealthController이므로 별도 제외 불필요
+      config.lograge.ignore_actions = ["HealthController#show"]
+    end
+  RUBY
 
   # == Step 7 (Admin): Admin 네임스페이스 ======================================
 
   say_step "7-admin", "Admin 네임스페이스"
 
-  # TODO: Phase 4 구현 시 — Admin::BaseController, Dashboard, Users
-  # create_file "app/controllers/admin/base_controller.rb" do ... end
-  # create_file "app/controllers/admin/dashboard_controller.rb" do ... end
-  # create_file "app/controllers/admin/users_controller.rb" do ... end
-  # create_file "app/views/layouts/admin.html.erb" do ... end
-  # create_file "app/views/admin/dashboard/show.html.erb" do ... end
-  # create_file "app/views/admin/users/index.html.erb" do ... end
-  # create_file "app/views/admin/users/show.html.erb" do ... end
+  # Admin::BaseController — before_action으로 관리자 역할 체크 (PRD 2.4)
+  # Pundit::NotAuthorizedError → ApplicationController rescue_from → 403
+  create_file "app/controllers/admin/base_controller.rb", <<~'RUBY'
+    # frozen_string_literal: true
 
-  # Admin 라우트
-  # TODO: Phase 4 구현 시 — admin namespace 추가
-  # route <<~'RUBY'
-  #   namespace :admin do
-  #     root "dashboard#show"
-  #     resources :users, only: [:index, :show]
-  #   end
-  # RUBY
+    module Admin
+      class BaseController < ApplicationController
+        before_action :require_admin
+        layout "admin"
+
+        private
+
+        # admin? 또는 super_admin? 역할만 접근 허용
+        # current_user nil → safe navigation → false → 403
+        def require_admin
+          raise Pundit::NotAuthorizedError unless current_user&.admin? || current_user&.super_admin?
+        end
+      end
+    end
+  RUBY
+
+  # Admin 레이아웃 — 사이드바 네비게이션 + FlashComponent 재활용 (Tailwind v4)
+  create_file "app/views/layouts/admin.html.erb", <<~'ERB'
+    <!DOCTYPE html>
+    <html lang="ko">
+    <head>
+      <meta charset="UTF-8">
+      <meta name="viewport" content="width=device-width, initial-scale=1.0">
+      <title><%= content_for(:title) || t("admin.title") %> | Admin</title>
+      <%= csrf_meta_tags %>
+      <%= csp_meta_tag %>
+      <%= stylesheet_link_tag "tailwind", "inter-font", "data-turbo-track": "reload" %>
+      <%= stylesheet_link_tag "application", "data-turbo-track": "reload" %>
+      <%= javascript_importmap_tags %>
+    </head>
+    <body class="bg-gray-100 min-h-screen">
+      <div class="flex min-h-screen">
+        <%# 사이드바 %>
+        <aside class="w-64 bg-gray-800 text-white flex-shrink-0">
+          <div class="p-6">
+            <h1 class="text-xl font-bold"><%= t("admin.sidebar.title") %></h1>
+          </div>
+          <nav class="mt-2">
+            <%= link_to t("admin.sidebar.dashboard"), admin_root_path,
+                class: "block px-6 py-3 text-gray-300 hover:bg-gray-700 hover:text-white transition-colors" %>
+            <%= link_to t("admin.sidebar.users"), admin_users_path,
+                class: "block px-6 py-3 text-gray-300 hover:bg-gray-700 hover:text-white transition-colors" %>
+          </nav>
+          <div class="mt-auto p-6 border-t border-gray-700">
+            <%= link_to t("admin.sidebar.back_to_site"), root_path,
+                class: "text-sm text-gray-400 hover:text-white" %>
+          </div>
+        </aside>
+
+        <%# 메인 콘텐츠 %>
+        <main class="flex-1 p-8">
+          <%= render(FlashComponent.new(flash: flash)) if flash.any? %>
+          <%= yield %>
+        </main>
+      </div>
+    </body>
+    </html>
+  ERB
+
+  # Admin 라우트 — /admin/* 네임스페이스
+  route <<~'RUBY'
+    namespace :admin do
+      root "dashboard#show"
+      resources :users, only: [:index, :show]
+    end
+  RUBY
+
+  # Admin::DashboardController — 통계 대시보드 (사용자 수, 최근 가입)
+  create_file "app/controllers/admin/dashboard_controller.rb", <<~'RUBY'
+    # frozen_string_literal: true
+
+    module Admin
+      class DashboardController < BaseController
+        def show
+          @user_count = User.count
+          @recent_users = User.order(created_at: :desc).limit(5)
+        end
+      end
+    end
+  RUBY
+
+  # Admin::UsersController — 사용자 목록 (Pagy + policy_scope) + 상세
+  create_file "app/controllers/admin/users_controller.rb", <<~'RUBY'
+    # frozen_string_literal: true
+
+    module Admin
+      class UsersController < BaseController
+        def index
+          @pagy, @users = pagy(policy_scope(User))
+        end
+
+        def show
+          @user = User.find(params[:id])
+          authorize @user
+        end
+      end
+    end
+  RUBY
+
+  # Admin 대시보드 뷰 — 통계 카드 (CardComponent 재활용)
+  create_file "app/views/admin/dashboard/show.html.erb", <<~'ERB'
+    <% content_for(:title) { t("admin.dashboard.title") } %>
+
+    <h1 class="text-2xl font-bold text-gray-900 mb-8"><%= t("admin.dashboard.title") %></h1>
+
+    <div class="grid grid-cols-1 md:grid-cols-3 gap-6 mb-8">
+      <%= render(CardComponent.new) do |card| %>
+        <% card.with_title { t("admin.dashboard.total_users") } %>
+        <% card.with_body do %>
+          <p class="text-3xl font-bold text-blue-600"><%= @user_count %></p>
+        <% end %>
+      <% end %>
+    </div>
+
+    <h2 class="text-xl font-semibold text-gray-900 mb-4"><%= t("admin.dashboard.recent_users") %></h2>
+
+    <div class="bg-white shadow rounded-lg overflow-hidden">
+      <table class="min-w-full divide-y divide-gray-200">
+        <thead class="bg-gray-50">
+          <tr>
+            <th class="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider"><%= t("admin.users.email") %></th>
+            <th class="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider"><%= t("admin.users.role") %></th>
+            <th class="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider"><%= t("admin.users.created_at") %></th>
+          </tr>
+        </thead>
+        <tbody class="bg-white divide-y divide-gray-200">
+          <% @recent_users.each do |user| %>
+            <tr>
+              <td class="px-6 py-4 whitespace-nowrap text-sm text-gray-900">
+                <%= link_to user.email_address, admin_user_path(user), class: "text-blue-600 hover:underline" %>
+              </td>
+              <td class="px-6 py-4 whitespace-nowrap">
+                <%= render(BadgeComponent.new(label: user.role.humanize, variant: user.super_admin? ? :error : user.admin? ? :warning : :info)) %>
+              </td>
+              <td class="px-6 py-4 whitespace-nowrap text-sm text-gray-500"><%= l(user.created_at, format: :short) %></td>
+            </tr>
+          <% end %>
+        </tbody>
+      </table>
+    </div>
+  ERB
+
+  # Admin 사용자 목록 뷰 — 테이블 + PaginationComponent
+  create_file "app/views/admin/users/index.html.erb", <<~'ERB'
+    <% content_for(:title) { t("admin.users.title") } %>
+
+    <h1 class="text-2xl font-bold text-gray-900 mb-8"><%= t("admin.users.title") %></h1>
+
+    <div class="bg-white shadow rounded-lg overflow-hidden">
+      <table class="min-w-full divide-y divide-gray-200">
+        <thead class="bg-gray-50">
+          <tr>
+            <th class="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider"><%= t("admin.users.email") %></th>
+            <th class="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider"><%= t("admin.users.role") %></th>
+            <th class="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider"><%= t("admin.users.created_at") %></th>
+          </tr>
+        </thead>
+        <tbody class="bg-white divide-y divide-gray-200">
+          <% @users.each do |user| %>
+            <tr>
+              <td class="px-6 py-4 whitespace-nowrap text-sm text-gray-900">
+                <%= link_to user.email_address, admin_user_path(user), class: "text-blue-600 hover:underline" %>
+              </td>
+              <td class="px-6 py-4 whitespace-nowrap">
+                <%= render(BadgeComponent.new(label: user.role.humanize, variant: user.super_admin? ? :error : user.admin? ? :warning : :info)) %>
+              </td>
+              <td class="px-6 py-4 whitespace-nowrap text-sm text-gray-500"><%= l(user.created_at, format: :short) %></td>
+            </tr>
+          <% end %>
+        </tbody>
+      </table>
+    </div>
+
+    <%= render(PaginationComponent.new(pagy: @pagy)) %>
+  ERB
+
+  # Admin 사용자 상세 뷰 — BadgeComponent로 역할 표시
+  create_file "app/views/admin/users/show.html.erb", <<~'ERB'
+    <% content_for(:title) { @user.email_address } %>
+
+    <div class="mb-6">
+      <%= link_to t("admin.users.back_to_list"), admin_users_path, class: "text-blue-600 hover:underline text-sm" %>
+    </div>
+
+    <div class="bg-white shadow rounded-lg p-6">
+      <div class="flex items-center justify-between mb-6">
+        <h1 class="text-2xl font-bold text-gray-900"><%= @user.email_address %></h1>
+        <%= render(BadgeComponent.new(label: @user.role.humanize, variant: @user.super_admin? ? :error : @user.admin? ? :warning : :info)) %>
+      </div>
+
+      <dl class="grid grid-cols-1 gap-4 sm:grid-cols-2">
+        <div>
+          <dt class="text-sm font-medium text-gray-500"><%= t("admin.users.email") %></dt>
+          <dd class="mt-1 text-sm text-gray-900"><%= @user.email_address %></dd>
+        </div>
+        <div>
+          <dt class="text-sm font-medium text-gray-500"><%= t("admin.users.role") %></dt>
+          <dd class="mt-1 text-sm text-gray-900"><%= @user.role.humanize %></dd>
+        </div>
+        <div>
+          <dt class="text-sm font-medium text-gray-500"><%= t("admin.users.created_at") %></dt>
+          <dd class="mt-1 text-sm text-gray-900"><%= l(@user.created_at, format: :long) %></dd>
+        </div>
+        <div>
+          <dt class="text-sm font-medium text-gray-500"><%= t("admin.users.updated_at") %></dt>
+          <dd class="mt-1 text-sm text-gray-900"><%= l(@user.updated_at, format: :long) %></dd>
+        </div>
+      </dl>
+    </div>
+  ERB
 
   # == Step 12: 시드 데이터 ====================================================
 
   say_step 12, "시드 데이터"
 
-  # TODO: Phase 4 구현 시 — seeds.rb 진입점 + 하위 파일
-  # create_file "db/seeds.rb", force: true do
-  #   <<~'RUBY'
-  #     Dir[Rails.root.join("db/seeds/*.rb")].each { |f| load f }
-  #   RUBY
-  # end
-  # create_file "db/seeds/admin_user.rb" do ... end
-  # create_file "db/seeds/sample_data.rb" do ... end
+  # seeds.rb 진입점 — db/seeds/ 하위 파일을 알파벳 순 로드 (PRD 2.10)
+  # admin_user.rb(a) → sample_data.rb(s) 순서로 실행
+  create_file "db/seeds.rb", force: true do
+    <<~'RUBY'
+      # frozen_string_literal: true
+
+      # db/seeds/ 디렉토리 하위 파일을 알파벳 순서대로 로드
+      Dir[Rails.root.join("db/seeds/*.rb")].sort.each { |f| load f }
+    RUBY
+  end
+
+  # 관리자 시드 — 환경변수로 비밀번호 주입 (보안)
+  # Rails 8 auth generator: email_address 칼럼 사용 (email 아님)
+  create_file "db/seeds/admin_user.rb", <<~'RUBY'
+    # frozen_string_literal: true
+
+    admin_email = ENV.fetch("ADMIN_EMAIL", "admin@example.com")
+    admin_password = ENV.fetch("ADMIN_PASSWORD", "password123")
+
+    User.find_or_create_by!(email_address: admin_email) do |user|
+      user.password = admin_password
+      user.password_confirmation = admin_password
+      user.role = :super_admin
+    end
+
+    puts "Admin user seeded: #{admin_email}"
+  RUBY
+
+  # 개발용 샘플 데이터 — development 환경에서만 실행
+  create_file "db/seeds/sample_data.rb", <<~'RUBY'
+    # frozen_string_literal: true
+
+    return unless Rails.env.development?
+
+    10.times do |i|
+      User.find_or_create_by!(email_address: "user#{i + 1}@example.com") do |user|
+        user.password = "password123"
+        user.password_confirmation = "password123"
+        user.role = :user
+      end
+    end
+
+    puts "Sample data seeded: #{User.count} users total"
+  RUBY
 
   # -------------------------------------------------------------------------
   # Phase 5: Infrastructure, CI/CD & Deployment
@@ -2202,11 +2501,209 @@ after_bundle do
     end
   RUBY
 
-  # TODO: Phase 4 구현 시 — Policy + Admin 테스트
-  # create_test "policies/application_policy_test.rb" do ... end
-  # create_test "policies/user_policy_test.rb" do ... end
-  # create_test "controllers/admin/dashboard_controller_test.rb" do ... end
-  # create_test "controllers/admin/users_controller_test.rb" do ... end
+  # Phase 4: Policy 단위 테스트 + Admin 컨트롤러 통합 테스트
+
+  create_test "policies/application_policy_test.rb", <<~'RUBY'
+    require "test_helper"
+
+    class ApplicationPolicyTest < ActiveSupport::TestCase
+      setup do
+        @user = users(:regular)
+        @record = users(:admin)
+      end
+
+      test "default policy denies index" do
+        assert_not ApplicationPolicy.new(@user, @record).index?
+      end
+
+      test "default policy denies show" do
+        assert_not ApplicationPolicy.new(@user, @record).show?
+      end
+
+      test "default policy denies create" do
+        assert_not ApplicationPolicy.new(@user, @record).create?
+      end
+
+      test "default policy denies update" do
+        assert_not ApplicationPolicy.new(@user, @record).update?
+      end
+
+      test "default policy denies destroy" do
+        assert_not ApplicationPolicy.new(@user, @record).destroy?
+      end
+    end
+  RUBY
+
+  create_test "policies/user_policy_test.rb", <<~'RUBY'
+    require "test_helper"
+
+    class UserPolicyTest < ActiveSupport::TestCase
+      setup do
+        @regular = users(:regular)
+        @admin = users(:admin)
+        @super_admin = users(:super_admin)
+      end
+
+      # -- index? --
+      test "admin can index users" do
+        assert UserPolicy.new(@admin, User).index?
+      end
+
+      test "super_admin can index users" do
+        assert UserPolicy.new(@super_admin, User).index?
+      end
+
+      test "regular user cannot index users" do
+        assert_not UserPolicy.new(@regular, User).index?
+      end
+
+      # -- show? --
+      test "user can show self" do
+        assert UserPolicy.new(@regular, @regular).show?
+      end
+
+      test "user cannot show other user" do
+        assert_not UserPolicy.new(@regular, @admin).show?
+      end
+
+      test "admin can show any user" do
+        assert UserPolicy.new(@admin, @regular).show?
+      end
+
+      # -- update? --
+      test "user can update self" do
+        assert UserPolicy.new(@regular, @regular).update?
+      end
+
+      test "user cannot update other user" do
+        assert_not UserPolicy.new(@regular, @admin).update?
+      end
+
+      test "admin cannot update other user" do
+        assert_not UserPolicy.new(@admin, @regular).update?
+      end
+
+      test "super_admin can update any user" do
+        assert UserPolicy.new(@super_admin, @regular).update?
+      end
+
+      # -- change_role? --
+      test "only super_admin can change role" do
+        assert UserPolicy.new(@super_admin, @regular).change_role?
+      end
+
+      test "admin cannot change role" do
+        assert_not UserPolicy.new(@admin, @regular).change_role?
+      end
+
+      test "regular user cannot change role" do
+        assert_not UserPolicy.new(@regular, @regular).change_role?
+      end
+
+      # -- Scope --
+      test "scope for admin returns all users" do
+        scope = UserPolicy::Scope.new(@admin, User).resolve
+        assert_equal User.count, scope.count
+      end
+
+      test "scope for regular user returns only self" do
+        scope = UserPolicy::Scope.new(@regular, User).resolve
+        assert_equal 1, scope.count
+        assert_includes scope, @regular
+      end
+    end
+  RUBY
+
+  create_test "controllers/admin/dashboard_controller_test.rb", <<~'RUBY'
+    require "test_helper"
+
+    class Admin::DashboardControllerTest < ActionDispatch::IntegrationTest
+      setup do
+        @admin = users(:admin)
+        @regular = users(:regular)
+      end
+
+      test "admin can access dashboard" do
+        post session_url, params: { email_address: @admin.email_address, password: "password123" }
+        get admin_root_url
+        assert_response :success
+      end
+
+      test "regular user gets forbidden" do
+        post session_url, params: { email_address: @regular.email_address, password: "password123" }
+        get admin_root_url
+        assert_response :forbidden
+      end
+
+      test "unauthenticated user gets redirected" do
+        get admin_root_url
+        assert_redirected_to new_session_url
+      end
+    end
+  RUBY
+
+  create_test "controllers/admin/users_controller_test.rb", <<~'RUBY'
+    require "test_helper"
+
+    class Admin::UsersControllerTest < ActionDispatch::IntegrationTest
+      setup do
+        @admin = users(:admin)
+        @regular = users(:regular)
+      end
+
+      test "admin can list users" do
+        post session_url, params: { email_address: @admin.email_address, password: "password123" }
+        get admin_users_url
+        assert_response :success
+      end
+
+      test "admin can show user" do
+        post session_url, params: { email_address: @admin.email_address, password: "password123" }
+        get admin_user_url(@regular)
+        assert_response :success
+      end
+
+      test "regular user gets forbidden on index" do
+        post session_url, params: { email_address: @regular.email_address, password: "password123" }
+        get admin_users_url
+        assert_response :forbidden
+      end
+
+      test "regular user gets forbidden on show" do
+        post session_url, params: { email_address: @regular.email_address, password: "password123" }
+        get admin_user_url(@admin)
+        assert_response :forbidden
+      end
+
+      test "unauthenticated user gets redirected" do
+        get admin_users_url
+        assert_redirected_to new_session_url
+      end
+    end
+  RUBY
+
+  # Phase 4: Admin I18n 로케일 (한국어)
+  create_locale "defaults/admin.ko.yml", <<~YAML
+    ko:
+      admin:
+        title: "관리자"
+        sidebar:
+          title: "관리자 패널"
+          dashboard: "대시보드"
+          users: "사용자 관리"
+          back_to_site: "사이트로 돌아가기"
+        dashboard:
+          title: "대시보드"
+          total_users: "전체 사용자"
+          recent_users: "최근 가입 사용자"
+        users:
+          title: "사용자 관리"
+          email: "이메일"
+          role: "역할"
+          created_at: "가입일"
+          updated_at: "수정일"
+          back_to_list: "목록으로 돌아가기"
+  YAML
 
   # -------------------------------------------------------------------------
   # Final Summary
