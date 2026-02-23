@@ -526,29 +526,433 @@ after_bundle do
     RUBY
   end
 
-  # ApplicationComponent 베이스 클래스
-  # TODO: Phase 3 구현 시 — 아래 주석 해제 및 실제 내용 작성
-  # create_file "app/components/application_component.rb" do
-  #   <<~'RUBY'
-  #     class ApplicationComponent < ViewComponent::Base
-  #     end
-  #   RUBY
-  # end
+  # ApplicationComponent 베이스 클래스 (YAGNI: 최소한의 공통 기능만)
+  create_file "app/components/application_component.rb", <<~'RUBY'
+    class ApplicationComponent < ViewComponent::Base
+      private
 
-  # 10종 ViewComponent 생성 (Phase 3 구현 시 create_component 헬퍼 사용)
-  # TODO: Phase 3 구현 시 — 각 컴포넌트의 ruby_content, erb_content 작성
-  #
-  # Components list (PRD 2.6절):
-  #   1. ButtonComponent    — primary/secondary/danger variant
-  #   2. CardComponent      — default/bordered variant, title/body slots
-  #   3. BadgeComponent     — success/warning/error/info variant
-  #   4. FlashComponent     — notice/alert/error, Stimulus auto-dismiss
-  #   5. ModalComponent     — open/close/ESC, Stimulus toggle
-  #   6. DropdownComponent  — toggle/outside-click, Stimulus
-  #   7. FormFieldComponent — label+input+error wrapper
-  #   8. EmptyStateComponent — icon+message+action
-  #   9. PaginationComponent — Pagy integration
-  #  10. NavbarComponent    — responsive, mobile toggle, Stimulus
+      def safe_classes(*args)
+        args.compact.join(" ")
+      end
+    end
+  RUBY
+
+  # 10종 ViewComponent 생성 (PRD 2.3.2절)
+  # 모든 Tailwind 클래스는 정적 상수(VARIANTS hash)로 정의 — 문자열 보간 금지
+  # Stimulus 컨트롤러는 Step 8에서 별도 생성, 여기서는 ERB data-* 속성만 참조
+
+  # --- 1. ButtonComponent ---
+  create_component :button, <<~'RUBY', <<~'ERB'
+    # frozen_string_literal: true
+
+    class ButtonComponent < ApplicationComponent
+      VARIANTS = {
+        primary: "inline-flex items-center justify-center rounded-md bg-indigo-600 px-4 py-2 text-sm font-semibold text-white shadow-sm hover:bg-indigo-500 focus-visible:outline focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-indigo-600 disabled:opacity-50 disabled:cursor-not-allowed",
+        secondary: "inline-flex items-center justify-center rounded-md bg-white px-4 py-2 text-sm font-semibold text-gray-900 shadow-sm ring-1 ring-inset ring-gray-300 hover:bg-gray-50 disabled:opacity-50 disabled:cursor-not-allowed",
+        danger: "inline-flex items-center justify-center rounded-md bg-red-600 px-4 py-2 text-sm font-semibold text-white shadow-sm hover:bg-red-500 focus-visible:outline focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-red-600 disabled:opacity-50 disabled:cursor-not-allowed"
+      }.freeze
+
+      def initialize(variant: :primary, tag: :button, href: nil, disabled: false, type: "button", **options)
+        @variant = variant
+        @tag = tag
+        @href = href
+        @disabled = disabled
+        @type = type
+        @options = options
+      end
+
+      private
+
+      def css_classes
+        safe_classes(VARIANTS[@variant], @options[:class])
+      end
+    end
+  RUBY
+    <% if @tag == :a %>
+      <%= link_to @href, class: css_classes, **@options.except(:class) do %>
+        <%= content %>
+      <% end %>
+    <% else %>
+      <button type="<%= @type %>" class="<%= css_classes %>" <%= "disabled" if @disabled %> <%= tag.attributes(@options.except(:class)) %>>
+        <%= content %>
+      </button>
+    <% end %>
+  ERB
+
+  # --- 2. CardComponent ---
+  create_component :card, <<~'RUBY', <<~'ERB'
+    # frozen_string_literal: true
+
+    class CardComponent < ApplicationComponent
+      VARIANTS = {
+        default: "rounded-lg bg-white shadow p-6",
+        bordered: "rounded-lg bg-white border border-gray-200 p-6"
+      }.freeze
+
+      renders_one :title
+      renders_one :body
+      renders_one :footer
+
+      def initialize(variant: :default)
+        @variant = variant
+      end
+
+      private
+
+      def css_classes
+        VARIANTS[@variant]
+      end
+    end
+  RUBY
+    <div class="<%= css_classes %>">
+      <% if title? %>
+        <div class="mb-4 text-lg font-semibold text-gray-900">
+          <%= title %>
+        </div>
+      <% end %>
+
+      <% if body? %>
+        <div class="text-gray-700">
+          <%= body %>
+        </div>
+      <% end %>
+
+      <% if footer? %>
+        <div class="mt-4 border-t border-gray-100 pt-4">
+          <%= footer %>
+        </div>
+      <% end %>
+    </div>
+  ERB
+
+  # --- 3. BadgeComponent ---
+  create_component :badge, <<~'RUBY', <<~'ERB'
+    # frozen_string_literal: true
+
+    class BadgeComponent < ApplicationComponent
+      VARIANTS = {
+        success: "inline-flex items-center rounded-full bg-green-50 px-2 py-1 text-xs font-medium text-green-700 ring-1 ring-inset ring-green-600/20",
+        warning: "inline-flex items-center rounded-full bg-yellow-50 px-2 py-1 text-xs font-medium text-yellow-800 ring-1 ring-inset ring-yellow-600/20",
+        error: "inline-flex items-center rounded-full bg-red-50 px-2 py-1 text-xs font-medium text-red-700 ring-1 ring-inset ring-red-600/20",
+        info: "inline-flex items-center rounded-full bg-blue-50 px-2 py-1 text-xs font-medium text-blue-700 ring-1 ring-inset ring-blue-600/20"
+      }.freeze
+
+      def initialize(variant: :info, label:)
+        @variant = variant
+        @label = label
+      end
+
+      private
+
+      def css_classes
+        VARIANTS[@variant]
+      end
+    end
+  RUBY
+    <span class="<%= css_classes %>"><%= @label %></span>
+  ERB
+
+  # --- 4. FlashComponent ---
+  create_component :flash, <<~'RUBY', <<~'ERB'
+    # frozen_string_literal: true
+
+    class FlashComponent < ApplicationComponent
+      VARIANTS = {
+        notice: "border-l-4 border-green-400 bg-green-50 p-4 text-green-800",
+        alert: "border-l-4 border-yellow-400 bg-yellow-50 p-4 text-yellow-800",
+        error: "border-l-4 border-red-400 bg-red-50 p-4 text-red-800"
+      }.freeze
+
+      # notice/alert는 Rails 표준, error는 추가
+      VARIANT_MAPPING = {
+        "notice" => :notice,
+        "alert" => :alert,
+        "error" => :error
+      }.freeze
+
+      def initialize(flash:)
+        @flash = flash
+      end
+
+      def render?
+        @flash.any?
+      end
+
+      private
+
+      def variant_for(type)
+        VARIANT_MAPPING[type.to_s] || :notice
+      end
+
+      def css_classes_for(type)
+        VARIANTS[variant_for(type)]
+      end
+    end
+  RUBY
+    <div class="space-y-2">
+      <% @flash.each do |type, message| %>
+        <div class="<%= css_classes_for(type) %> flex items-center justify-between rounded-md"
+             data-controller="flash"
+             data-flash-duration-value="5000"
+             data-flash-hidden-class="hidden">
+          <p class="text-sm font-medium"><%= message %></p>
+          <button type="button" data-action="click->flash#dismiss" class="ml-4 inline-flex shrink-0 rounded-md p-1.5 hover:bg-black/5 focus:outline-none">
+            <span class="sr-only"><%= t("defaults.buttons.close") %></span>
+            <svg class="h-4 w-4" fill="currentColor" viewBox="0 0 20 20">
+              <path fill-rule="evenodd" d="M4.293 4.293a1 1 0 011.414 0L10 8.586l4.293-4.293a1 1 0 111.414 1.414L11.414 10l4.293 4.293a1 1 0 01-1.414 1.414L10 11.414l-4.293 4.293a1 1 0 01-1.414-1.414L8.586 10 4.293 5.707a1 1 0 010-1.414z" clip-rule="evenodd"/>
+            </svg>
+          </button>
+        </div>
+      <% end %>
+    </div>
+  ERB
+
+  # --- 5. ModalComponent ---
+  create_component :modal, <<~'RUBY', <<~'ERB'
+    # frozen_string_literal: true
+
+    class ModalComponent < ApplicationComponent
+      renders_one :trigger
+      renders_one :body
+    end
+  RUBY
+    <div data-controller="modal">
+      <% if trigger? %>
+        <div data-action="click->modal#open">
+          <%= trigger %>
+        </div>
+      <% end %>
+
+      <%# dialogTarget이 backdrop 겸 scroll container 역할 %>
+      <%# closeOnBackdrop: event.target === dialogTarget일 때만 닫힘 (패널 내부 클릭은 무시) %>
+      <div data-modal-target="dialog"
+           data-action="click->modal#closeOnBackdrop"
+           class="hidden fixed inset-0 z-50 flex min-h-full items-center justify-center overflow-y-auto bg-gray-500/75 p-4"
+           aria-modal="true"
+           role="dialog">
+        <div class="relative w-full max-w-lg rounded-lg bg-white p-6 shadow-xl">
+          <%# Close button %>
+          <div class="absolute right-4 top-4">
+            <button type="button" data-action="click->modal#close" class="rounded-md text-gray-400 hover:text-gray-500 focus:outline-none">
+              <span class="sr-only"><%= t("defaults.buttons.close") %></span>
+              <svg class="h-5 w-5" fill="currentColor" viewBox="0 0 20 20">
+                <path fill-rule="evenodd" d="M4.293 4.293a1 1 0 011.414 0L10 8.586l4.293-4.293a1 1 0 111.414 1.414L11.414 10l4.293 4.293a1 1 0 01-1.414 1.414L10 11.414l-4.293 4.293a1 1 0 01-1.414-1.414L8.586 10 4.293 5.707a1 1 0 010-1.414z" clip-rule="evenodd"/>
+              </svg>
+            </button>
+          </div>
+
+          <% if body? %>
+            <%= body %>
+          <% end %>
+        </div>
+      </div>
+    </div>
+  ERB
+
+  # --- 6. DropdownComponent ---
+  create_component :dropdown, <<~'RUBY', <<~'ERB'
+    # frozen_string_literal: true
+
+    class DropdownComponent < ApplicationComponent
+      renders_one :trigger
+      renders_many :items
+    end
+  RUBY
+    <div data-controller="dropdown" data-dropdown-hidden-class="hidden" class="relative inline-block text-left">
+      <% if trigger? %>
+        <div data-action="click->dropdown#toggle">
+          <%= trigger %>
+        </div>
+      <% end %>
+
+      <div data-dropdown-target="menu"
+           class="hidden absolute right-0 z-10 mt-2 w-48 origin-top-right rounded-md bg-white shadow-lg ring-1 ring-black/5 focus:outline-none"
+           role="menu"
+           aria-orientation="vertical">
+        <div class="py-1" role="none">
+          <% items.each do |item| %>
+            <%= item %>
+          <% end %>
+        </div>
+      </div>
+    </div>
+  ERB
+
+  # --- 7. FormFieldComponent ---
+  create_component :form_field, <<~'RUBY', <<~'ERB'
+    # frozen_string_literal: true
+
+    class FormFieldComponent < ApplicationComponent
+      INPUT_CLASSES = "block w-full rounded-md border-0 py-1.5 text-gray-900 shadow-sm ring-1 ring-inset ring-gray-300 placeholder:text-gray-400 focus:ring-2 focus:ring-inset focus:ring-indigo-600 sm:text-sm sm:leading-6"
+      INPUT_ERROR_CLASSES = "block w-full rounded-md border-0 py-1.5 text-gray-900 shadow-sm ring-1 ring-inset ring-red-500 placeholder:text-gray-400 focus:ring-2 focus:ring-inset focus:ring-red-600 sm:text-sm sm:leading-6"
+      LABEL_CLASSES = "block text-sm font-medium leading-6 text-gray-900"
+      ERROR_CLASSES = "mt-1 text-sm text-red-600"
+
+      def initialize(form:, field_name:, type: :text, label: nil, error_messages: nil, required: false, options: nil, **input_options)
+        @form = form
+        @field_name = field_name
+        @type = type
+        @label = label
+        @error_messages = error_messages
+        @required = required
+        @options = options
+        @input_options = input_options
+      end
+
+      private
+
+      def has_errors?
+        @error_messages.present?
+      end
+
+      def input_css_classes
+        has_errors? ? INPUT_ERROR_CLASSES : INPUT_CLASSES
+      end
+    end
+  RUBY
+    <div>
+      <% if @label %>
+        <%= @form.label @field_name, @label, class: FormFieldComponent::LABEL_CLASSES %>
+      <% end %>
+
+      <div class="mt-1">
+        <% case @type %>
+        <% when :select %>
+          <%= @form.select @field_name, @options, {}, class: input_css_classes, **@input_options %>
+        <% when :textarea %>
+          <%= @form.text_area @field_name, class: input_css_classes, **@input_options %>
+        <% when :password %>
+          <%= @form.password_field @field_name, class: input_css_classes, required: @required, **@input_options %>
+        <% when :email %>
+          <%= @form.email_field @field_name, class: input_css_classes, required: @required, **@input_options %>
+        <% else %>
+          <%= @form.text_field @field_name, class: input_css_classes, required: @required, **@input_options %>
+        <% end %>
+      </div>
+
+      <% if has_errors? %>
+        <% Array(@error_messages).each do |message| %>
+          <p class="<%= FormFieldComponent::ERROR_CLASSES %>"><%= message %></p>
+        <% end %>
+      <% end %>
+    </div>
+  ERB
+
+  # --- 8. EmptyStateComponent ---
+  create_component :empty_state, <<~'RUBY', <<~'ERB'
+    # frozen_string_literal: true
+
+    class EmptyStateComponent < ApplicationComponent
+      renders_one :icon
+      renders_one :action
+
+      def initialize(message:)
+        @message = message
+      end
+    end
+  RUBY
+    <div class="py-12 text-center">
+      <% if icon? %>
+        <div class="mx-auto mb-4 text-gray-400">
+          <%= icon %>
+        </div>
+      <% end %>
+
+      <p class="text-sm text-gray-500"><%= @message %></p>
+
+      <% if action? %>
+        <div class="mt-6">
+          <%= action %>
+        </div>
+      <% end %>
+    </div>
+  ERB
+
+  # --- 9. PaginationComponent ---
+  # Pagy 43.x: @pagy.series_nav로 raw HTML 출력 (<%== %> 사용)
+  # Pagy::Backend은 ApplicationController, Pagy::Frontend은 ApplicationHelper (Phase 4 설정)
+  create_component :pagination, <<~'RUBY', <<~'ERB'
+    # frozen_string_literal: true
+
+    class PaginationComponent < ApplicationComponent
+      def initialize(pagy:)
+        @pagy = pagy
+      end
+
+      def render?
+        @pagy.pages > 1
+      end
+    end
+  RUBY
+    <nav aria-label="Pagination" class="flex items-center justify-center py-4">
+      <%== @pagy.series_nav %>
+    </nav>
+  ERB
+
+  # --- 10. NavbarComponent ---
+  create_component :navbar, <<~'RUBY', <<~'ERB'
+    # frozen_string_literal: true
+
+    class NavbarComponent < ApplicationComponent
+      def initialize(user: nil)
+        @user = user
+      end
+
+      private
+
+      def signed_in?
+        @user.present?
+      end
+    end
+  RUBY
+    <nav class="bg-white shadow" data-controller="navbar" data-navbar-hidden-class="hidden">
+      <div class="mx-auto max-w-7xl px-4 sm:px-6 lg:px-8">
+        <div class="flex h-16 justify-between">
+          <%# Logo / Home link %>
+          <div class="flex shrink-0 items-center">
+            <%= link_to t("defaults.navigation.home"), root_path, class: "text-lg font-bold text-gray-900" %>
+          </div>
+
+          <%# Desktop navigation %>
+          <div class="hidden sm:ml-6 sm:flex sm:items-center sm:space-x-4">
+            <% if signed_in? %>
+              <%= link_to t("defaults.navigation.dashboard"), root_path, class: "rounded-md px-3 py-2 text-sm font-medium text-gray-700 hover:bg-gray-100 hover:text-gray-900" %>
+              <%= button_to t("defaults.navigation.logout"), session_path, method: :delete, class: "rounded-md px-3 py-2 text-sm font-medium text-gray-700 hover:bg-gray-100 hover:text-gray-900" %>
+            <% else %>
+              <%= link_to t("defaults.navigation.login"), new_session_path, class: "rounded-md px-3 py-2 text-sm font-medium text-gray-700 hover:bg-gray-100 hover:text-gray-900" %>
+              <%= link_to t("defaults.navigation.signup"), new_registration_path, class: "rounded-md bg-indigo-600 px-3 py-2 text-sm font-semibold text-white shadow-sm hover:bg-indigo-500" %>
+            <% end %>
+          </div>
+
+          <%# Mobile hamburger button %>
+          <div class="flex items-center sm:hidden">
+            <button type="button"
+                    data-action="click->navbar#toggle"
+                    class="inline-flex items-center justify-center rounded-md p-2 text-gray-400 hover:bg-gray-100 hover:text-gray-500 focus:outline-none"
+                    aria-expanded="false">
+              <span class="sr-only">Open main menu</span>
+              <svg class="h-6 w-6" fill="none" viewBox="0 0 24 24" stroke-width="1.5" stroke="currentColor">
+                <path stroke-linecap="round" stroke-linejoin="round" d="M3.75 6.75h16.5M3.75 12h16.5m-16.5 5.25h16.5"/>
+              </svg>
+            </button>
+          </div>
+        </div>
+      </div>
+
+      <%# Mobile menu %>
+      <div data-navbar-target="menu" class="hidden sm:hidden">
+        <div class="space-y-1 px-2 pb-3 pt-2">
+          <% if signed_in? %>
+            <%= link_to t("defaults.navigation.dashboard"), root_path, class: "block rounded-md px-3 py-2 text-base font-medium text-gray-700 hover:bg-gray-100 hover:text-gray-900" %>
+            <%= button_to t("defaults.navigation.logout"), session_path, method: :delete, class: "block w-full rounded-md px-3 py-2 text-left text-base font-medium text-gray-700 hover:bg-gray-100 hover:text-gray-900" %>
+          <% else %>
+            <%= link_to t("defaults.navigation.login"), new_session_path, class: "block rounded-md px-3 py-2 text-base font-medium text-gray-700 hover:bg-gray-100 hover:text-gray-900" %>
+            <%= link_to t("defaults.navigation.signup"), new_registration_path, class: "block rounded-md px-3 py-2 text-base font-medium text-indigo-600 hover:bg-gray-100" %>
+          <% end %>
+        </div>
+      </div>
+    </nav>
+  ERB
 
   # == Step 8: Stimulus 컨트롤러 4종 ==========================================
   # flash, modal, dropdown, navbar
@@ -557,11 +961,115 @@ after_bundle do
 
   say_step 8, "Stimulus 컨트롤러 4종"
 
-  # TODO: Phase 3 구현 시 — 4개 Stimulus 컨트롤러 JS 파일 작성
-  # create_file "app/javascript/controllers/flash_controller.js" do ... end
-  # create_file "app/javascript/controllers/modal_controller.js" do ... end
-  # create_file "app/javascript/controllers/dropdown_controller.js" do ... end
-  # create_file "app/javascript/controllers/navbar_controller.js" do ... end
+  # flash_controller.js — auto-dismiss + manual dismiss
+  create_file "app/javascript/controllers/flash_controller.js", <<~'JS'
+    import { Controller } from "@hotwired/stimulus"
+
+    export default class extends Controller {
+      static values = { duration: { type: Number, default: 5000 } }
+      static classes = ["hidden"]
+
+      connect() {
+        this.dismissTimer = setTimeout(() => this.dismiss(), this.durationValue)
+      }
+
+      disconnect() {
+        if (this.dismissTimer) {
+          clearTimeout(this.dismissTimer)
+        }
+      }
+
+      dismiss() {
+        if (this.dismissTimer) {
+          clearTimeout(this.dismissTimer)
+        }
+        this.element.classList.add(this.hiddenClass)
+        setTimeout(() => this.element.remove(), 300)
+      }
+    }
+  JS
+
+  # modal_controller.js — open/close + ESC key + backdrop click
+  create_file "app/javascript/controllers/modal_controller.js", <<~'JS'
+    import { Controller } from "@hotwired/stimulus"
+
+    export default class extends Controller {
+      static targets = ["dialog"]
+
+      connect() {
+        this.boundKeydown = (event) => {
+          if (event.key === "Escape") this.close()
+        }
+        document.addEventListener("keydown", this.boundKeydown)
+      }
+
+      disconnect() {
+        document.removeEventListener("keydown", this.boundKeydown)
+        document.body.style.overflow = ""
+      }
+
+      open() {
+        this.dialogTarget.classList.remove("hidden")
+        document.body.style.overflow = "hidden"
+      }
+
+      close() {
+        this.dialogTarget.classList.add("hidden")
+        document.body.style.overflow = ""
+      }
+
+      closeOnBackdrop(event) {
+        if (event.target === this.dialogTarget) {
+          this.close()
+        }
+      }
+    }
+  JS
+
+  # dropdown_controller.js — toggle + outside click close
+  create_file "app/javascript/controllers/dropdown_controller.js", <<~'JS'
+    import { Controller } from "@hotwired/stimulus"
+
+    export default class extends Controller {
+      static targets = ["menu"]
+      static classes = ["hidden"]
+
+      connect() {
+        this.boundClickOutside = (event) => {
+          if (!this.element.contains(event.target)) {
+            this.hide()
+          }
+        }
+        document.addEventListener("click", this.boundClickOutside)
+      }
+
+      disconnect() {
+        document.removeEventListener("click", this.boundClickOutside)
+      }
+
+      toggle() {
+        this.menuTarget.classList.toggle(this.hiddenClass)
+      }
+
+      hide() {
+        this.menuTarget.classList.add(this.hiddenClass)
+      }
+    }
+  JS
+
+  # navbar_controller.js — mobile menu toggle
+  create_file "app/javascript/controllers/navbar_controller.js", <<~'JS'
+    import { Controller } from "@hotwired/stimulus"
+
+    export default class extends Controller {
+      static targets = ["menu"]
+      static classes = ["hidden"]
+
+      toggle() {
+        this.menuTarget.classList.toggle(this.hiddenClass)
+      }
+    }
+  JS
 
   # == Step 7 (에러/헬스): ApplicationController + HealthController ============
   # ApplicationController: RecordNotFound(404) + Pundit::NotAuthorizedError(403)
@@ -598,25 +1106,21 @@ after_bundle do
     RUBY
   end
 
-  # TODO: Phase 3 구현 시 — HealthController 생성
-  # create_file "app/controllers/health_controller.rb" do
-  #   <<~'RUBY'
-  #     class HealthController < ApplicationController
-  #       allow_unauthenticated_access
-  #
-  #       def show
-  #         ActiveRecord::Base.connection.execute("SELECT 1")
-  #         render json: { status: "ok" }, status: :ok
-  #       rescue StandardError => e
-  #         render json: { status: "error", message: e.message }, status: :service_unavailable
-  #       end
-  #     end
-  #   RUBY
-  # end
+  create_file "app/controllers/health_controller.rb", <<~'RUBY'
+    class HealthController < ApplicationController
+      allow_unauthenticated_access
+
+      def show
+        ActiveRecord::Base.connection.execute("SELECT 1")
+        render json: { status: "ok" }, status: :ok
+      rescue StandardError => e
+        render json: { status: "error", message: e.message }, status: :service_unavailable
+      end
+    end
+  RUBY
 
   # Health route 추가
-  # TODO: Phase 3 구현 시 — route 메서드로 추가
-  # route 'get "/health", to: "health#show"'
+  route 'get "/health", to: "health#show"'
 
   # == Step 9: I18n 로케일 파일 ================================================
   # config.i18n.default_locale = :ko
@@ -626,23 +1130,184 @@ after_bundle do
   say_step 9, "I18n 로케일 파일"
 
   # I18n 설정 initializer
-  # TODO: Phase 3 구현 시 — locale.rb initializer 생성
-  # create_file "config/initializers/locale.rb" do
-  #   <<~'RUBY'
-  #     Rails.application.configure do
-  #       config.i18n.default_locale = :ko
-  #       config.i18n.available_locales = [:ko, :en]
-  #       config.i18n.load_path += Dir[Rails.root.join("config/locales/**/*.{rb,yml}")]
-  #     end
-  #   RUBY
-  # end
+  create_file "config/initializers/locale.rb", <<~'RUBY'
+    Rails.application.configure do
+      config.i18n.default_locale = :ko
+      config.i18n.available_locales = [:ko, :en]
+      config.i18n.load_path += Dir[Rails.root.join("config/locales/**/*.{rb,yml}")]
+    end
+  RUBY
 
-  # TODO: Phase 3 구현 시 — 6개 로케일 파일 생성 (create_locale 헬퍼 사용)
-  # create_locale "defaults/ko.yml", <<~YAML ... YAML
-  # create_locale "defaults/en.yml", <<~YAML ... YAML
-  # create_locale "models/ko.yml", <<~YAML ... YAML
-  # create_locale "models/en.yml", <<~YAML ... YAML
-  # 기존 ko.yml, en.yml은 gsub_file 또는 create_file force:true로 교체
+  # 루트 로케일 파일 (rails new 기본 파일 교체)
+  create_file "config/locales/ko.yml", force: true do
+    <<~YAML
+      ko:
+        registrations:
+          new:
+            title: "회원가입"
+            submit: "가입하기"
+            login_prompt: "이미 계정이 있으신가요?"
+            login_link: "로그인"
+          create:
+            success: "회원가입이 완료되었습니다."
+        sessions:
+          create:
+            invalid: "이메일 또는 비밀번호가 올바르지 않습니다."
+        passwords:
+          create:
+            sent: "비밀번호 재설정 안내가 발송되었습니다."
+          update:
+            success: "비밀번호가 변경되었습니다."
+            mismatch: "비밀번호가 일치하지 않습니다."
+          invalid_token: "비밀번호 재설정 링크가 유효하지 않거나 만료되었습니다."
+        rate_limit:
+          exceeded: "요청이 너무 많습니다. 잠시 후 다시 시도해주세요."
+    YAML
+  end
+
+  create_file "config/locales/en.yml", force: true do
+    <<~YAML
+      en:
+        registrations:
+          new:
+            title: "Sign Up"
+            submit: "Create Account"
+            login_prompt: "Already have an account?"
+            login_link: "Log in"
+          create:
+            success: "Account created successfully."
+        sessions:
+          create:
+            invalid: "Invalid email address or password."
+        passwords:
+          create:
+            sent: "Password reset instructions sent (if account exists)."
+          update:
+            success: "Password has been reset."
+            mismatch: "Passwords did not match."
+          invalid_token: "Password reset link is invalid or has expired."
+        rate_limit:
+          exceeded: "Too many requests. Please try again later."
+    YAML
+  end
+
+  # defaults/ 서브디렉토리 로케일 (공통 UI 텍스트)
+  create_locale "defaults/ko.yml", <<~YAML
+    ko:
+      defaults:
+        buttons:
+          submit: "제출"
+          save: "저장"
+          cancel: "취소"
+          delete: "삭제"
+          edit: "수정"
+          back: "뒤로"
+          confirm: "확인"
+          close: "닫기"
+        flash:
+          success: "성공적으로 처리되었습니다."
+          error: "오류가 발생했습니다."
+          alert: "알림"
+          notice: "안내"
+        navigation:
+          home: "홈"
+          dashboard: "대시보드"
+          settings: "설정"
+          login: "로그인"
+          logout: "로그아웃"
+          signup: "회원가입"
+        pagination:
+          previous: "이전"
+          next: "다음"
+        errors:
+          not_found: "요청하신 페이지를 찾을 수 없습니다."
+          unauthorized: "로그인이 필요합니다."
+          forbidden: "접근 권한이 없습니다."
+  YAML
+
+  create_locale "defaults/en.yml", <<~YAML
+    en:
+      defaults:
+        buttons:
+          submit: "Submit"
+          save: "Save"
+          cancel: "Cancel"
+          delete: "Delete"
+          edit: "Edit"
+          back: "Back"
+          confirm: "Confirm"
+          close: "Close"
+        flash:
+          success: "Completed successfully."
+          error: "An error occurred."
+          alert: "Alert"
+          notice: "Notice"
+        navigation:
+          home: "Home"
+          dashboard: "Dashboard"
+          settings: "Settings"
+          login: "Log in"
+          logout: "Log out"
+          signup: "Sign up"
+        pagination:
+          previous: "Previous"
+          next: "Next"
+        errors:
+          not_found: "The page you requested could not be found."
+          unauthorized: "You need to sign in first."
+          forbidden: "You are not authorized to access this page."
+  YAML
+
+  # models/ 서브디렉토리 로케일 (ActiveRecord 모델/속성)
+  create_locale "models/ko.yml", <<~YAML
+    ko:
+      activerecord:
+        models:
+          user: "사용자"
+        attributes:
+          user:
+            email_address: "이메일"
+            password: "비밀번호"
+            password_confirmation: "비밀번호 확인"
+            role: "역할"
+        errors:
+          models:
+            user:
+              attributes:
+                email_address:
+                  blank: "이메일을 입력해주세요."
+                  taken: "이미 사용 중인 이메일입니다."
+                  invalid: "유효한 이메일을 입력해주세요."
+                password:
+                  too_short: "비밀번호는 최소 %{count}자 이상이어야 합니다."
+                password_confirmation:
+                  confirmation: "비밀번호가 일치하지 않습니다."
+  YAML
+
+  create_locale "models/en.yml", <<~YAML
+    en:
+      activerecord:
+        models:
+          user: "User"
+        attributes:
+          user:
+            email_address: "Email"
+            password: "Password"
+            password_confirmation: "Password confirmation"
+            role: "Role"
+        errors:
+          models:
+            user:
+              attributes:
+                email_address:
+                  blank: "can't be blank."
+                  taken: "has already been taken."
+                  invalid: "is not a valid email."
+                password:
+                  too_short: "is too short (minimum is %{count} characters)."
+                password_confirmation:
+                  confirmation: "doesn't match password."
+  YAML
 
   # == Step 10: 커스텀 에러 페이지 =============================================
   # public/404.html, public/422.html, public/500.html
@@ -651,22 +1316,123 @@ after_bundle do
 
   say_step 10, "커스텀 에러 페이지"
 
-  # TODO: Phase 3 구현 시 — 3개 에러 페이지 + 403.html 생성
-  # create_file "public/404.html", force: true do ... end
-  # create_file "public/422.html", force: true do ... end
-  # create_file "public/500.html", force: true do ... end
-  # create_file "public/403.html" do ... end
+  error_page_style = <<~'STYLE'
+    * { margin: 0; padding: 0; box-sizing: border-box; }
+    body { font-family: system-ui, -apple-system, sans-serif; background-color: #f9fafb; color: #111; display: flex; align-items: center; justify-content: center; min-height: 100vh; padding: 1rem; text-align: center; }
+    .container { max-width: 28rem; }
+    .code { font-size: 6rem; font-weight: 800; line-height: 1; margin-bottom: 1rem; }
+    .message { font-size: 1.125rem; color: #4b5563; margin-bottom: 2rem; }
+    .link { display: inline-block; padding: 0.75rem 1.5rem; background-color: #000; color: #fff; text-decoration: none; border-radius: 0.375rem; font-size: 0.875rem; font-weight: 500; }
+    .link:hover { background-color: #333; }
+  STYLE
+
+  create_file "public/404.html", force: true do
+    <<~HTML
+      <!DOCTYPE html>
+      <html lang="ko">
+      <head>
+        <meta charset="UTF-8">
+        <meta name="viewport" content="width=device-width, initial-scale=1.0">
+        <title>404 - 페이지를 찾을 수 없습니다</title>
+        <style>#{error_page_style}</style>
+      </head>
+      <body>
+        <div class="container">
+          <div class="code">404</div>
+          <p class="message">찾으시는 페이지가 없습니다.</p>
+          <a href="/" class="link">홈으로 돌아가기</a>
+        </div>
+      </body>
+      </html>
+    HTML
+  end
+
+  create_file "public/422.html", force: true do
+    <<~HTML
+      <!DOCTYPE html>
+      <html lang="ko">
+      <head>
+        <meta charset="UTF-8">
+        <meta name="viewport" content="width=device-width, initial-scale=1.0">
+        <title>422 - 처리할 수 없는 요청</title>
+        <style>#{error_page_style}</style>
+      </head>
+      <body>
+        <div class="container">
+          <div class="code">422</div>
+          <p class="message">요청을 처리할 수 없습니다.</p>
+          <a href="/" class="link">홈으로 돌아가기</a>
+        </div>
+      </body>
+      </html>
+    HTML
+  end
+
+  create_file "public/500.html", force: true do
+    <<~HTML
+      <!DOCTYPE html>
+      <html lang="ko">
+      <head>
+        <meta charset="UTF-8">
+        <meta name="viewport" content="width=device-width, initial-scale=1.0">
+        <title>500 - 서버 오류</title>
+        <style>#{error_page_style}</style>
+      </head>
+      <body>
+        <div class="container">
+          <div class="code">500</div>
+          <p class="message">서버 오류가 발생했습니다.</p>
+          <a href="/" class="link">홈으로 돌아가기</a>
+        </div>
+      </body>
+      </html>
+    HTML
+  end
+
+  create_file "public/403.html" do
+    <<~HTML
+      <!DOCTYPE html>
+      <html lang="ko">
+      <head>
+        <meta charset="UTF-8">
+        <meta name="viewport" content="width=device-width, initial-scale=1.0">
+        <title>403 - 접근 권한 없음</title>
+        <style>#{error_page_style}</style>
+      </head>
+      <body>
+        <div class="container">
+          <div class="code">403</div>
+          <p class="message">접근 권한이 없습니다.</p>
+          <a href="/" class="link">홈으로 돌아가기</a>
+        </div>
+      </body>
+      </html>
+    HTML
+  end
 
   # == Step 5 (계속): 레이아웃 업데이트 ========================================
 
-  # TODO: Phase 3 구현 시 — application.html.erb에 FlashComponent, NavbarComponent 렌더링 추가
-  # inject_into_file "app/views/layouts/application.html.erb",
-  #   after: "<body>\n" do
-  #   <<~ERB
-  #     <%= render(NavbarComponent.new(user: Current.user)) %>
-  #     <%= render(FlashComponent.new(flash: flash)) if flash.any? %>
-  #   ERB
-  # end
+  say_step "5b", "레이아웃 업데이트 및 Tailwind @source"
+
+  # application.html.erb에 NavbarComponent + FlashComponent 렌더링 추가
+  inject_into_file "app/views/layouts/application.html.erb",
+    after: "<body>\n" do
+    <<~'ERB'
+        <%= render(NavbarComponent.new(user: Current.user)) %>
+        <%= render(FlashComponent.new(flash: flash)) if flash.any? %>
+    ERB
+  end
+
+  # Tailwind CSS v4 @source 디렉티브 추가
+  # ViewComponent 파일의 Tailwind 클래스 스캐닝 명시적 보장
+  # Tailwind v4는 자동 스캐닝하지만, @source로 확실히 포함시킴
+  # 경로: app/assets/tailwind/application.css → ../../components = app/components
+  inject_into_file "app/assets/tailwind/application.css",
+    before: '@import "tailwindcss"' do
+    <<~'CSS'
+      @source "../../components";
+    CSS
+  end
 
   # -------------------------------------------------------------------------
   # Phase 4: Authorization, Admin & Seed Data
@@ -1082,11 +1848,359 @@ after_bundle do
     RUBY
   end
 
-  # TODO: Phase 3 구현 시 — ViewComponent 테스트 10개
-  # %w[button card badge flash modal dropdown form_field empty_state pagination navbar].each do |name|
-  #   create_test "components/#{name}_component_test.rb" do ... end
-  # end
-  # create_test "controllers/health_controller_test.rb" do ... end
+  # Phase 3: ViewComponent 테스트 10종 + HealthController 테스트
+
+  create_test "components/button_component_test.rb", <<~'RUBY'
+    require "test_helper"
+
+    class ButtonComponentTest < ViewComponent::TestCase
+      test "renders primary button by default" do
+        render_inline(ButtonComponent.new) { "Click me" }
+        assert_selector("button[type='button']", text: "Click me")
+        assert_selector("button.bg-indigo-600")
+      end
+
+      test "renders secondary variant" do
+        render_inline(ButtonComponent.new(variant: :secondary)) { "Cancel" }
+        assert_selector("button.ring-1")
+        assert_no_selector("button.bg-indigo-600")
+      end
+
+      test "renders danger variant" do
+        render_inline(ButtonComponent.new(variant: :danger)) { "Delete" }
+        assert_selector("button.bg-red-600")
+      end
+
+      test "renders as link when tag is :a" do
+        render_inline(ButtonComponent.new(tag: :a, href: "/path")) { "Link" }
+        assert_selector("a[href='/path']", text: "Link")
+        assert_no_selector("button")
+      end
+
+      test "renders disabled button" do
+        render_inline(ButtonComponent.new(disabled: true)) { "Disabled" }
+        assert_selector("button[disabled]")
+      end
+    end
+  RUBY
+
+  create_test "components/card_component_test.rb", <<~'RUBY'
+    require "test_helper"
+
+    class CardComponentTest < ViewComponent::TestCase
+      test "renders default card with shadow" do
+        render_inline(CardComponent.new) do |card|
+          card.with_body { "Content" }
+        end
+        assert_selector("div.shadow", text: "Content")
+      end
+
+      test "renders bordered variant" do
+        render_inline(CardComponent.new(variant: :bordered)) do |card|
+          card.with_body { "Content" }
+        end
+        assert_selector("div.border")
+      end
+
+      test "renders title slot" do
+        render_inline(CardComponent.new) do |card|
+          card.with_title { "Title" }
+          card.with_body { "Body" }
+        end
+        assert_selector("div.font-semibold", text: "Title")
+      end
+
+      test "renders footer slot" do
+        render_inline(CardComponent.new) do |card|
+          card.with_body { "Body" }
+          card.with_footer { "Footer" }
+        end
+        assert_selector("div.border-t", text: "Footer")
+      end
+    end
+  RUBY
+
+  create_test "components/badge_component_test.rb", <<~'RUBY'
+    require "test_helper"
+
+    class BadgeComponentTest < ViewComponent::TestCase
+      test "renders info badge by default" do
+        render_inline(BadgeComponent.new(label: "New"))
+        assert_selector("span.bg-blue-50", text: "New")
+      end
+
+      test "renders success badge" do
+        render_inline(BadgeComponent.new(variant: :success, label: "Active"))
+        assert_selector("span.bg-green-50", text: "Active")
+      end
+
+      test "renders warning badge" do
+        render_inline(BadgeComponent.new(variant: :warning, label: "Pending"))
+        assert_selector("span.bg-yellow-50", text: "Pending")
+      end
+
+      test "renders error badge" do
+        render_inline(BadgeComponent.new(variant: :error, label: "Failed"))
+        assert_selector("span.bg-red-50", text: "Failed")
+      end
+    end
+  RUBY
+
+  create_test "components/flash_component_test.rb", <<~'RUBY'
+    require "test_helper"
+
+    class FlashComponentTest < ViewComponent::TestCase
+      test "renders notice flash message" do
+        render_inline(FlashComponent.new(flash: { notice: "Success!" }))
+        assert_selector("[data-controller='flash']")
+        assert_text("Success!")
+        assert_selector(".border-green-400")
+      end
+
+      test "renders alert flash message" do
+        render_inline(FlashComponent.new(flash: { alert: "Warning!" }))
+        assert_selector(".border-yellow-400")
+        assert_text("Warning!")
+      end
+
+      test "renders error flash message" do
+        render_inline(FlashComponent.new(flash: { error: "Error!" }))
+        assert_selector(".border-red-400")
+        assert_text("Error!")
+      end
+
+      test "does not render when flash is empty" do
+        render_inline(FlashComponent.new(flash: {}))
+        assert_no_selector("[data-controller='flash']")
+      end
+
+      test "renders dismiss button" do
+        render_inline(FlashComponent.new(flash: { notice: "Test" }))
+        assert_selector("button[data-action='click->flash#dismiss']")
+      end
+    end
+  RUBY
+
+  create_test "components/modal_component_test.rb", <<~'RUBY'
+    require "test_helper"
+
+    class ModalComponentTest < ViewComponent::TestCase
+      test "renders modal with trigger and body" do
+        render_inline(ModalComponent.new) do |modal|
+          modal.with_trigger { "Open" }
+          modal.with_body { "Modal content" }
+        end
+        assert_selector("[data-controller='modal']")
+        assert_selector("[data-action='click->modal#open']", text: "Open")
+        assert_selector("[data-modal-target='dialog']")
+        assert_text("Modal content")
+      end
+
+      test "renders close button" do
+        render_inline(ModalComponent.new) do |modal|
+          modal.with_body { "Content" }
+        end
+        assert_selector("button[data-action='click->modal#close']")
+      end
+
+      test "dialog has backdrop click handler" do
+        render_inline(ModalComponent.new) do |modal|
+          modal.with_body { "Content" }
+        end
+        assert_selector("[data-action='click->modal#closeOnBackdrop']")
+      end
+    end
+  RUBY
+
+  create_test "components/dropdown_component_test.rb", <<~'RUBY'
+    require "test_helper"
+
+    class DropdownComponentTest < ViewComponent::TestCase
+      test "renders dropdown with trigger and items" do
+        render_inline(DropdownComponent.new) do |dropdown|
+          dropdown.with_trigger { "Menu" }
+          dropdown.with_item { "Item 1" }
+          dropdown.with_item { "Item 2" }
+        end
+        assert_selector("[data-controller='dropdown']")
+        assert_selector("[data-action='click->dropdown#toggle']", text: "Menu")
+        assert_selector("[data-dropdown-target='menu']")
+        assert_text("Item 1")
+        assert_text("Item 2")
+      end
+
+      test "menu has role=menu attribute" do
+        render_inline(DropdownComponent.new) do |dropdown|
+          dropdown.with_trigger { "Menu" }
+        end
+        assert_selector("[role='menu']")
+      end
+    end
+  RUBY
+
+  create_test "components/form_field_component_test.rb", <<~'RUBY'
+    require "test_helper"
+
+    class FormFieldComponentTest < ViewComponent::TestCase
+      setup do
+        @user = User.new
+      end
+
+      test "renders text field with label" do
+        with_rendered_component do
+          assert_selector("label", text: "Name")
+          assert_selector("input[type='text']")
+        end
+      end
+
+      test "renders error messages" do
+        with_rendered_component(error_messages: ["can't be blank"]) do
+          assert_selector("p.text-red-600", text: "can't be blank")
+        end
+      end
+
+      private
+
+      def with_rendered_component(error_messages: nil, &block)
+        vc_test_controller.view_context.form_with(model: @user, url: "/test") do |form|
+          render_inline(FormFieldComponent.new(
+            form: form,
+            field_name: :email_address,
+            label: "Name",
+            error_messages: error_messages
+          ))
+        end
+        yield
+      end
+    end
+  RUBY
+
+  create_test "components/empty_state_component_test.rb", <<~'RUBY'
+    require "test_helper"
+
+    class EmptyStateComponentTest < ViewComponent::TestCase
+      test "renders message" do
+        render_inline(EmptyStateComponent.new(message: "No items found"))
+        assert_text("No items found")
+        assert_selector("div.text-center")
+      end
+
+      test "renders icon slot" do
+        render_inline(EmptyStateComponent.new(message: "Empty")) do |empty|
+          empty.with_icon { "<svg>icon</svg>".html_safe }
+        end
+        assert_selector("svg")
+      end
+
+      test "renders action slot" do
+        render_inline(EmptyStateComponent.new(message: "Empty")) do |empty|
+          empty.with_action { "Add new" }
+        end
+        assert_text("Add new")
+      end
+    end
+  RUBY
+
+  create_test "components/pagination_component_test.rb", <<~'RUBY'
+    require "test_helper"
+
+    class PaginationComponentTest < ViewComponent::TestCase
+      test "renders pagination when multiple pages" do
+        pagy = Pagy.new(count: 100, page: 1, limit: 10)
+        render_inline(PaginationComponent.new(pagy: pagy))
+        assert_selector("nav[aria-label='Pagination']")
+      end
+
+      test "does not render when single page" do
+        pagy = Pagy.new(count: 5, page: 1, limit: 10)
+        render_inline(PaginationComponent.new(pagy: pagy))
+        assert_no_selector("nav")
+      end
+    end
+  RUBY
+
+  create_test "components/navbar_component_test.rb", <<~'RUBY'
+    require "test_helper"
+
+    class NavbarComponentTest < ViewComponent::TestCase
+      test "renders navbar with login links when no user" do
+        render_inline(NavbarComponent.new(user: nil))
+        assert_selector("nav[data-controller='navbar']")
+        assert_selector("a", text: I18n.t("defaults.navigation.login"))
+        assert_selector("a", text: I18n.t("defaults.navigation.signup"))
+      end
+
+      test "renders navbar with logout when user present" do
+        user = users(:regular)
+        render_inline(NavbarComponent.new(user: user))
+        assert_text(I18n.t("defaults.navigation.logout"))
+        assert_text(I18n.t("defaults.navigation.dashboard"))
+      end
+
+      test "renders mobile hamburger button" do
+        render_inline(NavbarComponent.new)
+        assert_selector("button[data-action='click->navbar#toggle']")
+        assert_selector("[data-navbar-target='menu']")
+      end
+    end
+  RUBY
+
+  # Phase 3: HealthController 통합 테스트
+  create_test "controllers/health_controller_test.rb", <<~'RUBY'
+    require "test_helper"
+
+    class HealthControllerTest < ActionDispatch::IntegrationTest
+      test "GET /health returns ok when database is connected" do
+        get "/health"
+        assert_response :success
+        json = JSON.parse(response.body)
+        assert_equal "ok", json["status"]
+      end
+    end
+  RUBY
+
+  # Phase 3: I18n 키 정합성 테스트
+  create_test "i18n/locale_keys_test.rb", <<~'RUBY'
+    require "test_helper"
+
+    class LocaleKeysTest < ActiveSupport::TestCase
+      test "ko and en locales have matching top-level keys" do
+        ko_keys = flatten_keys(I18n.backend.translations[:ko] || {})
+        en_keys = flatten_keys(I18n.backend.translations[:en] || {})
+
+        missing_in_en = ko_keys - en_keys
+        missing_in_ko = en_keys - ko_keys
+
+        assert missing_in_en.empty?, "Keys in ko but missing in en: #{missing_in_en.join(', ')}"
+        assert missing_in_ko.empty?, "Keys in en but missing in ko: #{missing_in_ko.join(', ')}"
+      end
+
+      test "defaults.buttons keys exist in ko" do
+        assert_not_nil I18n.t("defaults.buttons.submit", locale: :ko, raise: true)
+        assert_not_nil I18n.t("defaults.buttons.save", locale: :ko, raise: true)
+        assert_not_nil I18n.t("defaults.buttons.cancel", locale: :ko, raise: true)
+      end
+
+      test "defaults.navigation keys exist in ko" do
+        assert_not_nil I18n.t("defaults.navigation.home", locale: :ko, raise: true)
+        assert_not_nil I18n.t("defaults.navigation.login", locale: :ko, raise: true)
+        assert_not_nil I18n.t("defaults.navigation.logout", locale: :ko, raise: true)
+      end
+
+      private
+
+      def flatten_keys(hash, prefix = "")
+        hash.each_with_object([]) do |(key, value), keys|
+          full_key = prefix.empty? ? key.to_s : "#{prefix}.#{key}"
+          if value.is_a?(Hash)
+            keys.concat(flatten_keys(value, full_key))
+          else
+            keys << full_key
+          end
+        end
+      end
+    end
+  RUBY
 
   # TODO: Phase 4 구현 시 — Policy + Admin 테스트
   # create_test "policies/application_policy_test.rb" do ... end
