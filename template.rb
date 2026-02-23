@@ -338,19 +338,16 @@ after_bundle do
       enum :role, { user: 0, admin: 1, super_admin: 2 }, default: :user
 
       validates :password, length: { minimum: 8 }, if: -> { new_record? || password.present? }
+
+      generates_token_for :email_confirmation, expires_in: 24.hours do
+        email_address
+      end
+
+      generates_token_for :magic_link, expires_in: 5.minutes do
+        updated_at.to_f
+      end
     RUBY
   end
-
-  # TODO: Phase 2 구현 시 — generates_token_for 추가
-  # inject_into_file "app/models/user.rb",
-  #   after: "  validates :password, length: { minimum: 8 }...\n" do
-  #   <<~'RUBY'
-  #
-  #     generates_token_for :email_confirmation, expires_in: 24.hours do
-  #       email
-  #     end
-  #   RUBY
-  # end
 
   # role 컬럼을 User migration에 추가
   # 타겟: "      t.string :password_digest, null: false\n" 직후
@@ -374,39 +371,93 @@ after_bundle do
     "  resource :registration, only: %i[new create]\n"
   end
 
-  # TODO: Phase 2 구현 시 — RegistrationsController 생성
-  # create_file "app/controllers/registrations_controller.rb" do
-  #   <<~'RUBY'
-  #     class RegistrationsController < ApplicationController
-  #       allow_unauthenticated_access
-  #       rate_limit to: 5, within: 1.hour, only: :create,
-  #         with: -> { redirect_to new_registration_url, alert: t("rate_limit.exceeded") }
-  #
-  #       def new
-  #         @user = User.new
-  #       end
-  #
-  #       def create
-  #         @user = User.new(registration_params)
-  #         if @user.save
-  #           start_new_session_for @user
-  #           redirect_to root_path, notice: t("registrations.created")
-  #         else
-  #           render :new, status: :unprocessable_entity
-  #         end
-  #       end
-  #
-  #       private
-  #
-  #       def registration_params
-  #         params.require(:user).permit(:email_address, :password, :password_confirmation)
-  #       end
-  #     end
-  #   RUBY
-  # end
+  create_file "app/controllers/registrations_controller.rb" do
+    <<~'RUBY'
+      class RegistrationsController < ApplicationController
+        allow_unauthenticated_access only: %i[new create]
+        rate_limit to: 5, within: 1.hour, only: :create,
+          with: -> { redirect_to new_registration_url, alert: t("rate_limit.exceeded") }
 
-  # TODO: Phase 2 구현 시 — Registration view 생성
-  # create_file "app/views/registrations/new.html.erb" do ... end
+        def new
+          @user = User.new
+        end
+
+        def create
+          @user = User.new(registration_params)
+          if @user.save
+            start_new_session_for @user
+            redirect_to root_path, notice: t("registrations.create.success")
+          else
+            render :new, status: :unprocessable_entity
+          end
+        end
+
+        private
+
+        def registration_params
+          params.require(:user).permit(:email_address, :password, :password_confirmation)
+        end
+      end
+    RUBY
+  end
+
+  create_file "app/views/registrations/new.html.erb" do
+    <<~'ERB'
+      <div class="flex min-h-full flex-col justify-center px-6 py-12 lg:px-8">
+        <div class="sm:mx-auto sm:w-full sm:max-w-sm">
+          <h2 class="text-center text-2xl/9 font-bold tracking-tight text-gray-900">
+            <%= t("registrations.new.title") %>
+          </h2>
+        </div>
+
+        <div class="mt-10 sm:mx-auto sm:w-full sm:max-w-sm">
+          <% if @user.errors.any? %>
+            <div id="error-messages" class="mb-6 rounded-lg bg-red-50 p-4 text-sm text-red-800" role="alert">
+              <ul class="list-disc space-y-1 pl-5">
+                <% @user.errors.full_messages.each do |message| %>
+                  <li><%= message %></li>
+                <% end %>
+              </ul>
+            </div>
+          <% end %>
+
+          <%= form_with model: @user, url: registration_path, class: "space-y-6" do |form| %>
+            <div>
+              <%= form.label :email_address, class: "block text-sm/6 font-medium text-gray-900" %>
+              <div class="mt-2">
+                <%= form.email_field :email_address, required: true, autofocus: true, autocomplete: "email",
+                  class: "block w-full rounded-md border-0 px-3 py-1.5 text-gray-900 shadow-sm ring-1 ring-inset ring-gray-300 placeholder:text-gray-400 focus:ring-2 focus:ring-inset focus:ring-indigo-600 sm:text-sm/6" %>
+              </div>
+            </div>
+
+            <div>
+              <%= form.label :password, class: "block text-sm/6 font-medium text-gray-900" %>
+              <div class="mt-2">
+                <%= form.password_field :password, required: true, autocomplete: "new-password",
+                  class: "block w-full rounded-md border-0 px-3 py-1.5 text-gray-900 shadow-sm ring-1 ring-inset ring-gray-300 placeholder:text-gray-400 focus:ring-2 focus:ring-inset focus:ring-indigo-600 sm:text-sm/6" %>
+              </div>
+            </div>
+
+            <div>
+              <%= form.label :password_confirmation, class: "block text-sm/6 font-medium text-gray-900" %>
+              <div class="mt-2">
+                <%= form.password_field :password_confirmation, required: true, autocomplete: "new-password",
+                  class: "block w-full rounded-md border-0 px-3 py-1.5 text-gray-900 shadow-sm ring-1 ring-inset ring-gray-300 placeholder:text-gray-400 focus:ring-2 focus:ring-inset focus:ring-indigo-600 sm:text-sm/6" %>
+              </div>
+            </div>
+
+            <%= form.submit t("registrations.new.submit"),
+              class: "flex w-full justify-center rounded-md bg-indigo-600 px-3 py-1.5 text-sm/6 font-semibold text-white shadow-sm hover:bg-indigo-500 focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-indigo-600" %>
+          <% end %>
+
+          <p class="mt-10 text-center text-sm/6 text-gray-500">
+            <%= t("registrations.new.login_prompt") %>
+            <%= link_to t("registrations.new.login_link"), new_session_path, class: "font-semibold text-indigo-600 hover:text-indigo-500" %>
+          </p>
+        </div>
+      </div>
+    ERB
+  end
 
   # == Step 18: rate_limit 설정 ================================================
   # 검증 결과: SessionsController, PasswordsController는 이미 rate_limit 포함
@@ -414,11 +465,42 @@ after_bundle do
   # RegistrationsController만 수동 추가 필요
   # ==========================================================================
 
-  say_step 18, "rate_limit 설정"
+  say_step 18, "rate_limit 설정 + I18n 적용"
 
-  # NOTE: SessionsController — rate_limit 이미 포함 (auth generator 자동 생성)
-  # NOTE: PasswordsController — rate_limit 이미 포함 (auth generator 자동 생성)
-  # RegistrationsController — Phase 2 구현 시 create_file에서 직접 포함 (위 TODO 참조)
+  # SessionsController — rate_limit alert를 I18n으로 교체
+  gsub_file "app/controllers/sessions_controller.rb",
+    'alert: "Try again later."',
+    'alert: t("rate_limit.exceeded")'
+
+  # SessionsController — 로그인 실패 메시지를 I18n으로 교체
+  gsub_file "app/controllers/sessions_controller.rb",
+    'alert: "Try another email address or password."',
+    'alert: t("sessions.create.invalid")'
+
+  # PasswordsController — rate_limit 값 변경 (10/3min → 3/1hr, ROADMAP spec) + I18n
+  gsub_file "app/controllers/passwords_controller.rb",
+    'rate_limit to: 10, within: 3.minutes, only: :create, with: -> { redirect_to new_password_path, alert: "Try again later." }',
+    'rate_limit to: 3, within: 1.hour, only: :create, with: -> { redirect_to new_password_path, alert: t("rate_limit.exceeded") }'
+
+  # PasswordsController — 비밀번호 재설정 안내 메시지 I18n
+  gsub_file "app/controllers/passwords_controller.rb",
+    'notice: "Password reset instructions sent (if user with that email address exists)."',
+    'notice: t("passwords.create.sent")'
+
+  # PasswordsController — 비밀번호 재설정 성공 메시지 I18n
+  gsub_file "app/controllers/passwords_controller.rb",
+    'notice: "Password has been reset."',
+    'notice: t("passwords.update.success")'
+
+  # PasswordsController — 비밀번호 불일치 메시지 I18n
+  gsub_file "app/controllers/passwords_controller.rb",
+    'alert: "Passwords did not match."',
+    'alert: t("passwords.update.mismatch")'
+
+  # PasswordsController — 토큰 만료/무효 메시지 I18n
+  gsub_file "app/controllers/passwords_controller.rb",
+    'alert: "Password reset link is invalid or has expired."',
+    'alert: t("passwords.invalid_token")'
 
   # -------------------------------------------------------------------------
   # Phase 3: UI Components, Error Handling & I18n
@@ -843,9 +925,162 @@ after_bundle do
   # Estimated: ~400 lines of actual content
   # -------------------------------------------------------------------------
 
-  # TODO: Phase 2 구현 시 — User 모델 테스트
-  # create_test "models/user_test.rb" do ... end
-  # create_test "controllers/registrations_controller_test.rb" do ... end
+  # Phase 2: Fixtures + User 모델 테스트
+  create_file "test/fixtures/users.yml", force: true do
+    <<~'YAML'
+      regular:
+        email_address: user@example.com
+        password_digest: <%= BCrypt::Password.create('password123') %>
+        role: 0
+
+      admin:
+        email_address: admin@example.com
+        password_digest: <%= BCrypt::Password.create('password123') %>
+        role: 1
+
+      super_admin:
+        email_address: superadmin@example.com
+        password_digest: <%= BCrypt::Password.create('password123') %>
+        role: 2
+    YAML
+  end
+
+  create_test "models/user_test.rb", <<~'RUBY'
+    require "test_helper"
+
+    class UserTest < ActiveSupport::TestCase
+      # -- Role enum --
+      test "default role is user" do
+        user = User.new(email_address: "new@example.com", password: "password123", password_confirmation: "password123")
+        assert user.user?
+      end
+
+      test "admin role" do
+        assert users(:admin).admin?
+      end
+
+      test "super_admin role" do
+        assert users(:super_admin).super_admin?
+      end
+
+      # -- Password validation --
+      test "password minimum 8 characters rejects short" do
+        user = User.new(email_address: "short@example.com", password: "short12", password_confirmation: "short12")
+        assert_not user.valid?
+        assert_includes user.errors[:password], "is too short (minimum is 8 characters)"
+      end
+
+      test "password valid at 8 characters" do
+        user = User.new(email_address: "valid@example.com", password: "12345678", password_confirmation: "12345678")
+        assert user.valid?
+      end
+
+      # -- Email normalization --
+      test "email normalization strips and downcases" do
+        user = User.create!(email_address: "  TEST@Example.COM  ", password: "password123", password_confirmation: "password123")
+        assert_equal "test@example.com", user.email_address
+      end
+
+      # -- generates_token_for :email_confirmation --
+      test "generates email_confirmation token and resolves" do
+        user = users(:regular)
+        token = user.generate_token_for(:email_confirmation)
+        assert_not_nil token
+        found = User.find_by_token_for(:email_confirmation, token)
+        assert_equal user, found
+      end
+
+      # -- generates_token_for :magic_link --
+      test "generates magic_link token and resolves" do
+        user = users(:regular)
+        token = user.generate_token_for(:magic_link)
+        assert_not_nil token
+        found = User.find_by_token_for(:magic_link, token)
+        assert_equal user, found
+      end
+
+      test "magic_link token invalidated after update" do
+        user = users(:regular)
+        token = user.generate_token_for(:magic_link)
+        user.touch
+        found = User.find_by_token_for(:magic_link, token)
+        assert_nil found
+      end
+    end
+  RUBY
+
+  # Phase 2: Controller 통합 테스트
+  create_test "controllers/registrations_controller_test.rb", <<~'RUBY'
+    require "test_helper"
+
+    class RegistrationsControllerTest < ActionDispatch::IntegrationTest
+      test "get new renders registration form" do
+        get new_registration_url
+        assert_response :success
+      end
+
+      test "create with valid params creates user and redirects" do
+        assert_difference("User.count", 1) do
+          post registration_url, params: {
+            user: { email_address: "newuser@example.com", password: "password123", password_confirmation: "password123" }
+          }
+        end
+        assert_redirected_to root_url
+      end
+
+      test "create with short password renders form with errors" do
+        assert_no_difference("User.count") do
+          post registration_url, params: {
+            user: { email_address: "short@example.com", password: "short", password_confirmation: "short" }
+          }
+        end
+        assert_response :unprocessable_entity
+      end
+
+      test "create with duplicate email renders form with errors" do
+        assert_no_difference("User.count") do
+          post registration_url, params: {
+            user: { email_address: users(:regular).email_address, password: "password123", password_confirmation: "password123" }
+          }
+        end
+        assert_response :unprocessable_entity
+      end
+    end
+  RUBY
+
+  create_file "test/controllers/sessions_controller_test.rb", force: true do
+    <<~'RUBY'
+      require "test_helper"
+
+      class SessionsControllerTest < ActionDispatch::IntegrationTest
+        setup do
+          @user = users(:regular)
+        end
+
+        test "get new renders login form" do
+          get new_session_url
+          assert_response :success
+        end
+
+        test "create with valid credentials logs in and redirects" do
+          post session_url, params: { email_address: @user.email_address, password: "password123" }
+          assert_redirected_to root_url
+        end
+
+        test "create with invalid credentials redirects with alert" do
+          post session_url, params: { email_address: @user.email_address, password: "wrongpassword" }
+          assert_redirected_to new_session_url
+        end
+
+        test "destroy logs out and redirects" do
+          post session_url, params: { email_address: @user.email_address, password: "password123" }
+
+          delete session_url
+          assert_redirected_to new_session_url
+        end
+      end
+    RUBY
+  end
 
   # TODO: Phase 3 구현 시 — ViewComponent 테스트 10개
   # %w[button card badge flash modal dropdown form_field empty_state pagination navbar].each do |name|
