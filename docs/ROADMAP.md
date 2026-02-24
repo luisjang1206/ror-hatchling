@@ -3,7 +3,7 @@
 > **버전**: 1.2
 > **기준일**: 2026-02-22
 > **관련 문서**: PRD v3.3, TSD v1.3
-> **상태**: Phase 0 완료, Phase 1 구현 준비
+> **상태**: Phase 0~6 전체 완료
 
 ---
 
@@ -325,7 +325,7 @@ db/cable_migrate/.keep             # 생성
 
 ### 작업 항목
 
-- [ ] **1-1. Gemfile 수정 (Step 1)**
+- [x] **1-1. Gemfile 수정 (Step 1)**
   - TSD v1.3 4.4절의 전체 Gemfile 기준으로 Gem 추가
   - `rails new -d postgresql -c tailwind`가 이미 포함하는 Gem 확인 후, 누락분만 추가
   - 추가 대상 production gems: `solid_queue`, `solid_cache`, `solid_cable`, `pundit`, `pagy`, `lograge`, `view_component`, `thruster`, `kamal`
@@ -333,7 +333,7 @@ db/cable_migrate/.keep             # 생성
   - `ruby "~> 3.4"` 버전 제약 추가
   - `bundle install` 실행 (`after_bundle` 블록 활용)
 
-- [ ] **1-2. 디렉토리 구조 생성 (Step 6)**
+- [x] **1-2. 디렉토리 구조 생성 (Step 6)**
   - `app/services/.keep` 생성
   - `app/policies/.keep` 생성
   - `app/components/.keep` 생성 (ViewComponent용)
@@ -342,24 +342,24 @@ db/cable_migrate/.keep             # 생성
   - `db/queue_migrate/.keep` 생성
   - `db/cable_migrate/.keep` 생성
 
-- [ ] **1-3. database.yml 멀티DB 설정 (Step 11)**
+- [x] **1-3. database.yml 멀티DB 설정 (Step 11)**
   - 기존 `config/database.yml` 교체 (전체 재작성)
   - development/test/production 각 환경에 primary/cache/queue/cable 4개 DB 정의
   - `migrations_paths` 설정: cache → `db/cache_migrate`, queue → `db/queue_migrate`, cable → `db/cable_migrate`
   - `&default` anchor에 공통 설정 (adapter, encoding, pool, timeout)
   - 환경변수 기반 접속 정보 (`DATABASE_URL` 등)
 
-- [ ] **1-4. Procfile.dev 수정 (Step 14)**
+- [x] **1-4. Procfile.dev 수정 (Step 14)**
   - `rails new -c tailwind`이 이미 생성하는 Procfile.dev 확인
   - 기본: `web: bin/rails server -p 3000`, `css: bin/rails tailwindcss:watch`
   - 추가: `jobs: bin/jobs` (SolidQueue 워커)
   - `bin/jobs` 스크립트 존재 여부 확인 (SolidQueue 설치 시 자동 생성 여부)
 
-- [ ] **1-5. 환경 설정 파일**
+- [x] **1-5. 환경 설정 파일**
   - `.env.example` 생성 (필요한 환경변수 문서화)
   - `.gitignore`에 `.env` 추가 확인
 
-- [ ] **1-6. Phase 1 테스트**
+- [x] **1-6. Phase 1 테스트**
   - template.rb (Phase 1 범위만) 실행 후 `rails new` 성공 확인
   - `bundle install` 정상 완료 확인
   - 4개 DB 생성 확인 (`rails db:create`)
@@ -373,13 +373,13 @@ db/cable_migrate/.keep             # 생성
 | Phase 0 | Rails Template API 동작 확인, 멀티DB 설정 검증 완료 |
 
 ### 검증 방법
-- [ ] `rails new test_app -d postgresql -c tailwind -m template.rb` 성공
-- [ ] `Gemfile`에 TSD 명시 Gem 전체 포함, 버전 핀 정확
-- [ ] `config/database.yml`에 primary/cache/queue/cable 4개 DB 정의 확인
-- [ ] `rails db:create` 실행 시 4개 DB 생성 (development 환경 기준)
-- [ ] `app/services/`, `app/policies/`, `app/components/` 디렉토리 존재
-- [ ] `db/cache_migrate/`, `db/queue_migrate/`, `db/cable_migrate/` 디렉토리 존재
-- [ ] `Procfile.dev`에 web/css/jobs 3개 프로세스 정의
+- [x] `rails new test_app -d postgresql -c tailwind -m template.rb` 성공
+- [x] `Gemfile`에 TSD 명시 Gem 전체 포함, 버전 핀 정확
+- [x] `config/database.yml`에 primary/cache/queue/cable 4개 DB 정의 확인
+- [x] `rails db:create` 실행 시 4개 DB 생성 (development 환경 기준)
+- [x] `app/services/`, `app/policies/`, `app/components/` 디렉토리 존재
+- [x] `db/cache_migrate/`, `db/queue_migrate/`, `db/cable_migrate/` 디렉토리 존재
+- [x] `Procfile.dev`에 web/css/jobs 3개 프로세스 정의
 
 ### 예상 공수
 | 항목 | 순수 작업 | 버퍼(30%) | 합계 |
@@ -446,12 +446,12 @@ test/fixtures/users.yml                     # 생성/수정
 
 ### 작업 항목
 
-- [ ] **2-1. Authentication Generator 실행 (Step 2)**
+- [x] **2-1. Authentication Generator 실행 (Step 2)**
   - `after_bundle` 블록 내에서 `rails_command "generate authentication"` 실행
   - Generator 출력 파일 확인 (Phase 0에서 파악한 목록 기준)
   - 생성된 마이그레이션에 role 컬럼이 포함되지 않음을 확인
 
-- [ ] **2-2. User 모델 확장 (Step 4)**
+- [x] **2-2. User 모델 확장 (Step 4)**
   - role 컬럼 추가 마이그레이션 생성: `add_column :users, :role, :integer, default: 0, null: false`
   - User 모델에 `enum :role, { user: 0, admin: 1, super_admin: 2 }` 추가
   - 비밀번호 정책 Validation 추가: `validates :password, length: { minimum: 8 }, if: -> { password.present? }`
@@ -463,14 +463,14 @@ test/fixtures/users.yml                     # 생성/수정
     ```
   - DB 인덱스: role 컬럼에 인덱스 추가 고려
 
-- [ ] **2-3. 회원가입 플로우 구현 (Step 3)**
+- [x] **2-3. 회원가입 플로우 구현 (Step 3)**
   - `RegistrationsController` 생성 (`new`, `create` 액션)
   - `app/views/registrations/new.html.erb` 회원가입 폼 생성
   - 라우트 추가: `resource :registration, only: [:new, :create]`
   - 회원가입 성공 시 자동 세션 생성 및 리다이렉트
   - 실패 시 에러 메시지 표시 (I18n 키 사용)
 
-- [ ] **2-4. rate_limit 설정 (Step 18)**
+- [x] **2-4. rate_limit 설정 (Step 18)**
   - `SessionsController`에 rate_limit 추가:
     ```ruby
     rate_limit to: 10, within: 3.minutes, only: :create,
@@ -487,7 +487,7 @@ test/fixtures/users.yml                     # 생성/수정
       with: -> { redirect_to new_password_url, alert: t("rate_limit.exceeded") }
     ```
 
-- [ ] **2-5. Phase 2 테스트**
+- [x] **2-5. Phase 2 테스트**
   - User 모델 단위 테스트: role enum, 비밀번호 정책, token 생성/검증
   - RegistrationsController 통합 테스트: 가입 성공/실패, 중복 이메일
   - SessionsController 통합 테스트: 로그인 성공/실패
@@ -502,14 +502,14 @@ test/fixtures/users.yml                     # 생성/수정
 | Phase 1, Step 11 | database.yml 멀티DB 설정 완료 (primary DB에 users/sessions 테이블 생성) |
 
 ### 검증 방법
-- [ ] `rails generate authentication` 성공적으로 실행
-- [ ] User 모델에 role enum, 비밀번호 정책, generates_token_for 존재
-- [ ] 회원가입 페이지 접속 가능 (`GET /registration/new`)
-- [ ] 회원가입 성공 시 세션 생성 및 리다이렉트
-- [ ] 비밀번호 8자 미만 시 가입 실패
-- [ ] 로그인 시도 10회 초과 시 rate_limit 동작
-- [ ] `bin/rails test test/models/user_test.rb` 통과
-- [ ] `bin/rails test test/controllers/registrations_controller_test.rb` 통과
+- [x] `rails generate authentication` 성공적으로 실행
+- [x] User 모델에 role enum, 비밀번호 정책, generates_token_for 존재
+- [x] 회원가입 페이지 접속 가능 (`GET /registration/new`)
+- [x] 회원가입 성공 시 세션 생성 및 리다이렉트
+- [x] 비밀번호 8자 미만 시 가입 실패
+- [x] 로그인 시도 10회 초과 시 rate_limit 동작
+- [x] `bin/rails test test/models/user_test.rb` 통과
+- [x] `bin/rails test test/controllers/registrations_controller_test.rb` 통과
 
 ### 예상 공수
 | 항목 | 순수 작업 | 버퍼(30%) | 합계 |
@@ -619,12 +619,12 @@ test/controllers/health_controller_test.rb
 
 ### 작업 항목
 
-- [ ] **3-1. ApplicationComponent 베이스 클래스 (Step 5 일부)**
+- [x] **3-1. ApplicationComponent 베이스 클래스 (Step 5 일부)**
   - `app/components/application_component.rb` 생성
   - `ViewComponent::Base`를 상속하는 베이스 클래스
   - 공통 헬퍼 메서드 정의 (필요시)
 
-- [ ] **3-2. UI 컴포넌트 10종 구현 (Step 5)**
+- [x] **3-2. UI 컴포넌트 10종 구현 (Step 5)**
   - 각 컴포넌트별 Ruby 클래스 + ERB 템플릿 쌍으로 생성
   - **ButtonComponent**: primary/secondary/danger variant, 링크 버튼 지원
   - **CardComponent**: default/bordered variant, title/body 슬롯
@@ -638,44 +638,44 @@ test/controllers/health_controller_test.rb
   - **NavbarComponent**: 반응형, 모바일 토글, Stimulus 연동
   - 모든 컴포넌트에 Tailwind CSS 클래스 적용
 
-- [ ] **3-3. Stimulus 컨트롤러 4종 구현 (Step 8)**
+- [x] **3-3. Stimulus 컨트롤러 4종 구현 (Step 8)**
   - `flash_controller.js`: 자동 닫기 타이머, 수동 닫기 버튼
   - `modal_controller.js`: 열기/닫기 토글, ESC 키 바인딩, 백드롭 클릭 닫기
   - `dropdown_controller.js`: 토글, 외부 클릭 감지 닫기
   - `navbar_controller.js`: 모바일 메뉴 토글
   - Import Maps 핀 설정 확인 (Stimulus 컨트롤러 자동 로딩)
 
-- [ ] **3-4. ApplicationController 에러 핸들링 (Step 7 일부)**
+- [x] **3-4. ApplicationController 에러 핸들링 (Step 7 일부)**
   - `rescue_from ActiveRecord::RecordNotFound` -> 404 응답
   - `rescue_from Pundit::NotAuthorizedError` -> 403 응답
   - 500 에러는 rescue하지 않음 (Rails 미들웨어 위임)
   - HTML/JSON 응답 분기 (`respond_to` 블록)
 
-- [ ] **3-5. HealthController 구현 (Step 7 일부)**
+- [x] **3-5. HealthController 구현 (Step 7 일부)**
   - `GET /health` readiness 체크 엔드포인트
   - DB 연결 확인: `ActiveRecord::Base.connection.execute("SELECT 1")`
   - 성공 시 200 + JSON `{ status: "ok" }`, 실패 시 503
   - 라우트 추가: `get "/health", to: "health#show"`
   - `/up` (liveness)은 Rails 기본 제공이므로 별도 구현 불필요
 
-- [ ] **3-6. I18n 로케일 파일 생성 (Step 9)**
+- [x] **3-6. I18n 로케일 파일 생성 (Step 9)**
   - `config/initializers/locale.rb`: `config.i18n.default_locale = :ko`, load_path 설정
   - `config/locales/ko.yml`, `config/locales/en.yml`: 루트 파일
   - `config/locales/defaults/ko.yml`, `config/locales/defaults/en.yml`: 공통 UI 텍스트 (버튼, 상태, flash 메시지, rate_limit 메시지 등)
   - `config/locales/models/ko.yml`, `config/locales/models/en.yml`: 모델/속성 번역 (User 모델 등)
   - I18n load_path에 하위 디렉토리 포함 설정
 
-- [ ] **3-7. 커스텀 에러 페이지 (Step 10)**
+- [x] **3-7. 커스텀 에러 페이지 (Step 10)**
   - `public/404.html`: Not Found 페이지 (Tailwind 인라인 스타일)
   - `public/422.html`: Unprocessable Entity 페이지 (Tailwind 인라인 스타일)
   - `public/500.html`: Internal Server Error 페이지 (Tailwind 인라인 스타일)
   - 주의: public/ 파일은 에셋 파이프라인 미사용이므로, Tailwind를 CDN 또는 인라인 스타일로 적용
 
-- [ ] **3-8. 레이아웃 업데이트**
+- [x] **3-8. 레이아웃 업데이트**
   - `app/views/layouts/application.html.erb` 수정: FlashComponent 렌더링, NavbarComponent 렌더링
   - Stimulus 컨트롤러 연결 확인 (importmap 핀)
 
-- [ ] **3-9. Phase 3 테스트**
+- [x] **3-9. Phase 3 테스트**
   - 10종 ViewComponent 단위 테스트 (render_inline + assert_selector)
   - HealthController 통합 테스트 (200/503 응답)
   - ApplicationController 에러 핸들링 통합 테스트
@@ -690,16 +690,16 @@ test/controllers/health_controller_test.rb
 | Phase 2, Step 18 | rate_limit I18n 메시지 키 필요 (Phase 3에서 정의) |
 
 ### 검증 방법
-- [ ] 10종 ViewComponent 전체 render_inline 테스트 통과
-- [ ] FlashComponent에서 notice/alert/error 메시지 정상 표시
-- [ ] ModalComponent ESC 키, 백드롭 클릭으로 닫기 동작 (시스템 테스트)
-- [ ] DropdownComponent 외부 클릭 닫기 동작 (시스템 테스트)
-- [ ] `GET /health` 200 응답 (DB 연결 정상 시)
-- [ ] `GET /health` 503 응답 (DB 연결 실패 시)
-- [ ] RecordNotFound 발생 시 404 페이지 렌더링
-- [ ] `public/404.html`, `public/422.html`, `public/500.html` Tailwind 스타일 적용
-- [ ] `I18n.t("defaults.buttons.save", locale: :ko)` 정상 반환
-- [ ] `bin/rails test test/components/` 전체 통과
+- [x] 10종 ViewComponent 전체 render_inline 테스트 통과
+- [x] FlashComponent에서 notice/alert/error 메시지 정상 표시
+- [x] ModalComponent ESC 키, 백드롭 클릭으로 닫기 동작 (시스템 테스트)
+- [x] DropdownComponent 외부 클릭 닫기 동작 (시스템 테스트)
+- [x] `GET /health` 200 응답 (DB 연결 정상 시)
+- [x] `GET /health` 503 응답 (DB 연결 실패 시)
+- [x] RecordNotFound 발생 시 404 페이지 렌더링
+- [x] `public/404.html`, `public/422.html`, `public/500.html` Tailwind 스타일 적용
+- [x] `I18n.t("defaults.buttons.save", locale: :ko)` 정상 반환
+- [x] `bin/rails test test/components/` 전체 통과
 
 ### 예상 공수
 | 항목 | 순수 작업 | 버퍼(30%) | 합계 |
@@ -782,24 +782,24 @@ test/controllers/admin/users_controller_test.rb
 
 ### 작업 항목
 
-- [ ] **4-1. Pundit 설치 및 ApplicationPolicy 생성 (Step 17 일부)**
+- [x] **4-1. Pundit 설치 및 ApplicationPolicy 생성 (Step 17 일부)**
   - `generate "pundit:install"` 실행 -> ApplicationPolicy 생성
   - ApplicationController에 `include Pundit::Authorization` 추가
   - ApplicationPolicy 기본 정책 검토 (모든 액션 기본 거부)
 
-- [ ] **4-2. UserPolicy 생성**
+- [x] **4-2. UserPolicy 생성**
   - 일반 사용자: 자기 자신만 show/update 허용
   - admin/super_admin: 모든 사용자 show, index 허용
   - super_admin: 사용자 역할 변경 허용
 
-- [ ] **4-3. Pagy 이니셜라이저 (Step 17 일부)**
+- [x] **4-3. Pagy 이니셜라이저 (Step 17 일부)**
   - `config/initializers/pagy.rb` 생성
   - `Pagy::DEFAULT[:limit] = 25` (페이지당 항목 수)
   - `Pagy::DEFAULT[:size] = [1, 4, 4, 1]` -> 주의: v43에서는 `Pagy::DEFAULT[:slots]` 사용 여부 확인
   - ApplicationController에 `include Pagy::Backend` 추가
   - ApplicationHelper에 `include Pagy::Frontend` 추가 (또는 PaginationComponent에서 처리)
 
-- [ ] **4-4. Lograge 이니셜라이저 (Step 17 일부)**
+- [x] **4-4. Lograge 이니셜라이저 (Step 17 일부)**
   - `config/initializers/lograge.rb` 생성
   - JSON 포매터: `config.lograge.formatter = Lograge::Formatters::Json.new`
   - custom_payload: `user_id`, `request_id`, `remote_ip`
@@ -807,36 +807,36 @@ test/controllers/admin/users_controller_test.rb
   - ignore_actions: `["HealthController#show"]`
   - production 환경에서만 활성화 또는 전 환경 활성화 여부 결정
 
-- [ ] **4-5. Admin::BaseController 구현 (Step 7 Admin 부분)**
+- [x] **4-5. Admin::BaseController 구현 (Step 7 Admin 부분)**
   - `Admin::BaseController < ApplicationController`
   - `before_action :require_admin` (Pundit 기반 역할 확인)
   - 관리자 레이아웃 사용: `layout "admin"`
   - admin 전용 인증 체크 (admin? 또는 super_admin?)
 
-- [ ] **4-6. Admin 레이아웃 생성**
+- [x] **4-6. Admin 레이아웃 생성**
   - `app/views/layouts/admin.html.erb` 생성
   - 관리자 전용 사이드바/네비게이션
   - Tailwind 스타일링, 별도 디자인
   - FlashComponent 렌더링 포함
 
-- [ ] **4-7. Admin::DashboardController 구현**
+- [x] **4-7. Admin::DashboardController 구현**
   - `show` 액션: 관리자 대시보드 메인 페이지
   - 기본 통계 표시 (사용자 수, 최근 가입 등)
   - 라우트: `namespace :admin do root "dashboard#show" end`
 
-- [ ] **4-8. Admin::UsersController 구현**
+- [x] **4-8. Admin::UsersController 구현**
   - `index` 액션: 사용자 목록 (Pagy 페이지네이션)
   - `show` 액션: 사용자 상세 정보
   - Pundit policy_scope 활용
   - PaginationComponent 연동
 
-- [ ] **4-9. 시드 데이터 구조 생성 (Step 12)**
+- [x] **4-9. 시드 데이터 구조 생성 (Step 12)**
   - `db/seeds.rb` 수정: 진입점 역할, `db/seeds/` 하위 파일 로드
   - `db/seeds/admin_user.rb`: 기본 관리자 계정 생성 (환경변수 또는 기본값)
   - `db/seeds/sample_data.rb`: 개발용 샘플 데이터 (development 환경만)
   - `find_or_create_by` 사용하여 중복 생성 방지
 
-- [ ] **4-10. Admin 라우트 설정**
+- [x] **4-10. Admin 라우트 설정**
   - `config/routes.rb`에 admin 네임스페이스 추가:
     ```ruby
     namespace :admin do
@@ -845,7 +845,7 @@ test/controllers/admin/users_controller_test.rb
     end
     ```
 
-- [ ] **4-11. Phase 4 테스트**
+- [x] **4-11. Phase 4 테스트**
   - Pundit 정책 단위 테스트 (ApplicationPolicy, UserPolicy)
   - Admin::DashboardController 통합 테스트 (관리자만 접근 허용)
   - Admin::UsersController 통합 테스트 (목록/상세, 페이지네이션)
@@ -863,14 +863,14 @@ test/controllers/admin/users_controller_test.rb
 | Phase 3, Step 7 | ApplicationController에 에러 핸들링 설정 (Pundit::NotAuthorizedError rescue) |
 
 ### 검증 방법
-- [ ] `generate "pundit:install"` 성공, ApplicationPolicy 존재
-- [ ] admin 역할 사용자로 `/admin` 접근 시 대시보드 표시
-- [ ] 일반 사용자로 `/admin` 접근 시 403 에러
-- [ ] `/admin/users` 페이지네이션 정상 동작 (Pagy + PaginationComponent)
-- [ ] Lograge 설정 후 요청 로그가 JSON 한 줄 형식으로 출력
-- [ ] `rails db:seed` 실행 후 관리자 계정 생성 확인
-- [ ] `bin/rails test test/policies/` 전체 통과
-- [ ] `bin/rails test test/controllers/admin/` 전체 통과
+- [x] `generate "pundit:install"` 성공, ApplicationPolicy 존재
+- [x] admin 역할 사용자로 `/admin` 접근 시 대시보드 표시
+- [x] 일반 사용자로 `/admin` 접근 시 403 에러
+- [x] `/admin/users` 페이지네이션 정상 동작 (Pagy + PaginationComponent)
+- [x] Lograge 설정 후 요청 로그가 JSON 한 줄 형식으로 출력
+- [x] `rails db:seed` 실행 후 관리자 계정 생성 확인
+- [x] `bin/rails test test/policies/` 전체 통과
+- [x] `bin/rails test test/controllers/admin/` 전체 통과
 
 ### 예상 공수
 | 항목 | 순수 작업 | 버퍼(30%) | 합계 |
@@ -944,7 +944,7 @@ config/environments/development.rb          # 수정 (cache_store, queue_adapter
 
 ### 작업 항목
 
-- [ ] **5-1. Solid Stack 설치 및 설정 (Step 19 준비)**
+- [x] **5-1. Solid Stack 설치 및 설정 (Step 19 준비)**
   - `solid_queue:install` 실행 -> 마이그레이션, 설정 파일 생성
   - `solid_cache:install` 실행 -> 마이그레이션, 설정 파일 생성
   - `solid_cable:install` 실행 -> 마이그레이션, 설정 파일 생성
@@ -957,7 +957,7 @@ config/environments/development.rb          # 수정 (cache_store, queue_adapter
     - `config.active_job.queue_adapter = :solid_queue`
     - `config.cache_store = :solid_cache_store`
 
-- [ ] **5-2. Docker 파일 수정 (Step 13)**
+- [x] **5-2. Docker 파일 수정 (Step 13)**
   - `Dockerfile` 확인 및 수정 (Rails 8 기본 멀티스테이지 빌드 활용):
     - 빌드 스테이지: `ruby:3.4.8-slim`, build-essential, libpq-dev
     - 런타임 스테이지: `ruby:3.4.8-slim`, libpq5 최소 의존성
@@ -969,7 +969,7 @@ config/environments/development.rb          # 수정 (cache_store, queue_adapter
     - 포트 매핑 (5432)
   - `.dockerignore` 확인 및 수정
 
-- [ ] **5-3. GitHub Actions CI 워크플로우 (Step 15)**
+- [x] **5-3. GitHub Actions CI 워크플로우 (Step 15)**
   - `.github/workflows/ci.yml` 생성
   - 트리거: `push` (main), `pull_request`
   - 7단계 파이프라인:
@@ -986,7 +986,7 @@ config/environments/development.rb          # 수정 (cache_store, queue_adapter
     - Propshaft 에셋: `app/assets/**` 해시
   - 서비스 컨테이너: `postgres:17` (환경변수로 4개 DB 생성)
 
-- [ ] **5-4. Kamal 2 배포 설정 (Step 16)**
+- [x] **5-4. Kamal 2 배포 설정 (Step 16)**
   - `config/deploy.yml` 수정:
     - service, image, registry (배포 대상 레지스트리)
     - servers: web 서버 IP (플레이스홀더)
@@ -1010,7 +1010,7 @@ config/environments/development.rb          # 수정 (cache_store, queue_adapter
     #   error_pages_path: /rails/public
     ```
 
-- [ ] **5-5. 초기 마이그레이션 실행 (Step 19)**
+- [x] **5-5. 초기 마이그레이션 실행 (Step 19)**
   - `rails_command "db:prepare"` -- primary DB 마이그레이션
   - Solid Stack 마이그레이션:
     - `rails_command "db:prepare:cache"` (또는 해당 명령)
@@ -1019,13 +1019,13 @@ config/environments/development.rb          # 수정 (cache_store, queue_adapter
   - 멀티DB 마이그레이션 실행 순서 확인
   - 마이그레이션 실패 시 에러 핸들링
 
-- [ ] **5-6. 환경별 설정 정리**
+- [x] **5-6. 환경별 설정 정리**
   - `config/environments/production.rb`: force_ssl, cache_store, queue_adapter, log_level
   - `config/environments/development.rb`: cache_store, queue_adapter
   - `config/environments/test.rb`: 테스트 환경 설정
   - CSP(Content Security Policy) 설정: `config/initializers/content_security_policy.rb`
 
-- [ ] **5-7. Phase 5 테스트**
+- [x] **5-7. Phase 5 테스트**
   - Docker: `docker-compose up db` 정상 기동, PostgreSQL 17 접속 확인
   - CI: ci.yml 문법 검증 (`actionlint` 또는 수동 확인)
   - Kamal: `deploy.yml` 문법 검증
@@ -1042,15 +1042,15 @@ config/environments/development.rb          # 수정 (cache_store, queue_adapter
 | Phase 4, Step 17 | Lograge 설정 (production 환경 로깅) |
 
 ### 검증 방법
-- [ ] `docker-compose up db` 실행 시 PostgreSQL 17 컨테이너 기동
-- [ ] `rails db:prepare` 실행 시 4개 DB 전체 마이그레이션 성공
-- [ ] `.github/workflows/ci.yml` 문법 유효 (YAML lint 통과)
-- [ ] `config/deploy.yml` 문법 유효 (YAML lint 통과)
-- [ ] `SolidQueue::Job` 테이블 존재 확인 (queue DB)
-- [ ] `SolidCache::Entry` 테이블 존재 확인 (cache DB)
-- [ ] `SolidCable::Message` 테이블 존재 확인 (cable DB)
-- [ ] production 환경에서 `config.cache_store`가 `:solid_cache_store`
-- [ ] production 환경에서 `config.active_job.queue_adapter`가 `:solid_queue`
+- [x] `docker-compose up db` 실행 시 PostgreSQL 17 컨테이너 기동
+- [x] `rails db:prepare` 실행 시 4개 DB 전체 마이그레이션 성공
+- [x] `.github/workflows/ci.yml` 문법 유효 (YAML lint 통과)
+- [x] `config/deploy.yml` 문법 유효 (YAML lint 통과)
+- [x] `SolidQueue::Job` 테이블 존재 확인 (queue DB)
+- [x] `SolidCache::Entry` 테이블 존재 확인 (cache DB)
+- [x] `SolidCable::Message` 테이블 존재 확인 (cable DB)
+- [x] production 환경에서 `config.cache_store`가 `:solid_cache_store`
+- [x] production 환경에서 `config.active_job.queue_adapter`가 `:solid_queue`
 
 ### 예상 공수
 | 항목 | 순수 작업 | 버퍼(30%) | 합계 |
@@ -1091,7 +1091,7 @@ README.md                                   # 생성 (전체 프로젝트 문서
 
 ### 작업 항목
 
-- [ ] **6-1. README.md 생성 (Step 20)**
+- [x] **6-1. README.md 생성 (Step 20)**
   PRD 5.3에 정의된 포함 내용:
   - 프로젝트 소개 및 기술 스택
   - 로컬 개발 환경 셋업 가이드:
@@ -1123,7 +1123,7 @@ README.md                                   # 생성 (전체 프로젝트 문서
     - `proxy.ssl` 활성화 시 `forward_headers` 설정
     - healthcheck URL/포트 검증
 
-- [ ] **6-2. 통합 테스트 (End-to-End)**
+- [x] **6-2. 통합 테스트 (End-to-End)**
   - 클린 환경에서 `rails new test_app -d postgresql -c tailwind -m template.rb` 실행
   - 전체 20단계 정상 완료 확인
   - `bin/setup` 실행 성공 (DB 생성, 마이그레이션, 시드)
@@ -1133,18 +1133,18 @@ README.md                                   # 생성 (전체 프로젝트 문서
   - `bundle exec rubocop` 위반 0건
   - `bundle exec brakeman` 보안 이슈 0건 (또는 허용 범위)
 
-- [ ] **6-3. 최종 점검 체크리스트**
-  - [ ] 외부 Gem 4개 제한 준수 확인
-  - [ ] PRD 5.2 20단계 전체 실행 확인
-  - [ ] 한국어 기본 로케일 동작 확인
-  - [ ] ViewComponent 10종 렌더링 확인
-  - [ ] Admin 페이지 접근 제어 확인
-  - [ ] rate_limit 동작 확인
-  - [ ] 멀티DB 4개 DB 정상 동작 확인
-  - [ ] Docker + docker-compose 정상 기동
-  - [ ] CI yml 유효성 확인
-  - [ ] deploy.yml 유효성 확인
-  - [ ] README 내용 완전성 확인
+- [x] **6-3. 최종 점검 체크리스트**
+  - [x] 외부 Gem 4개 제한 준수 확인
+  - [x] PRD 5.2 20단계 전체 실행 확인
+  - [x] 한국어 기본 로케일 동작 확인
+  - [x] ViewComponent 10종 렌더링 확인
+  - [x] Admin 페이지 접근 제어 확인
+  - [x] rate_limit 동작 확인
+  - [x] 멀티DB 4개 DB 정상 동작 확인
+  - [x] Docker + docker-compose 정상 기동
+  - [x] CI yml 유효성 확인
+  - [x] deploy.yml 유효성 확인
+  - [x] README 내용 완전성 확인
 
 ### 의존성
 
@@ -1153,13 +1153,13 @@ README.md                                   # 생성 (전체 프로젝트 문서
 | Phase 1-5 전체 | 모든 기능 구현 완료 |
 
 ### 검증 방법
-- [ ] 클린 환경에서 `rails new` + template.rb 실행 성공 (에러 0건)
-- [ ] 생성된 앱에서 `bin/rails test` 전체 통과
-- [ ] 생성된 앱에서 `bin/rails test:system` 전체 통과
-- [ ] 생성된 앱에서 `bundle exec rubocop` 통과
-- [ ] 생성된 앱에서 `bundle exec brakeman` 통과 (또는 허용 수준)
-- [ ] README.md에 PRD 5.3 정의 항목 전체 포함
-- [ ] 두 번 연속 `rails new` 실행 시 동일 결과 (멱등성 확인)
+- [x] 클린 환경에서 `rails new` + template.rb 실행 성공 (에러 0건)
+- [x] 생성된 앱에서 `bin/rails test` 전체 통과
+- [x] 생성된 앱에서 `bin/rails test:system` 전체 통과
+- [x] 생성된 앱에서 `bundle exec rubocop` 통과
+- [x] 생성된 앱에서 `bundle exec brakeman` 통과 (또는 허용 수준)
+- [x] README.md에 PRD 5.3 정의 항목 전체 포함
+- [x] 두 번 연속 `rails new` 실행 시 동일 결과 (멱등성 확인)
 
 ### 예상 공수
 | 항목 | 순수 작업 | 버퍼(30%) | 합계 |
