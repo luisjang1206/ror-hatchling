@@ -274,15 +274,18 @@ after_bundle do
 
   # == Step 14: Procfile.dev 수정 =============================================
   # rails new -c tailwind 기본 생성: web + css (2프로세스)
-  # 추가: jobs (SolidQueue 워커) → 3프로세스
+  # 수정: css에 [always] 추가 (foreman stdin 닫힘 대응)
+  # 추가: jobs (SolidQueue 워커, async 모드 — pg fork segfault 방지)
   # NOTE: bin/jobs는 solid_queue:install이 자동 생성 (Rails 8.1 rails new 시)
   # ==========================================================================
 
   say_step 14, "Procfile.dev 수정"
 
   # rails new -c tailwind 기본 Procfile.dev: web + css
-  # append_to_file로 기존 내용 보존 + jobs만 추가 (최소 변경 원칙)
-  append_to_file "Procfile.dev", "jobs: bin/jobs\n"
+  # css: [always] 옵션으로 foreman stdin 닫힘 시에도 watch 유지
+  # jobs: async 모드로 fork 없이 실행 (pg gem segfault 방지)
+  gsub_file "Procfile.dev", /^css:.*$/, "css: bin/rails tailwindcss:watch[always]"
+  append_to_file "Procfile.dev", "jobs: bin/jobs --mode=async\n"
 
   # == Step 1 (계속): 환경 설정 파일 ==========================================
 
@@ -2378,8 +2381,8 @@ after_bundle do
       | Process | Command | Description |
       |---|---|---|
       | `web` | `rails server -p 3000` | Rails application server |
-      | `css` | Tailwind watcher | Rebuilds CSS on file changes |
-      | `jobs` | SolidQueue worker | Processes background jobs |
+      | `css` | Tailwind watcher (always) | Rebuilds CSS on file changes |
+      | `jobs` | SolidQueue worker (async) | Processes background jobs |
 
       > **Note (Hybrid Docker):** Only PostgreSQL runs inside Docker. The Rails app itself runs natively on your machine via `bin/dev`. This avoids Docker networking overhead and makes debugging straightforward.
 
@@ -2943,17 +2946,17 @@ after_bundle do
 
       ```
       web: bin/rails server -p 3000
-      css: bin/rails tailwindcss:watch
-      jobs: bundle exec jobs
+      css: bin/rails tailwindcss:watch[always]
+      jobs: bin/jobs --mode=async
       ```
 
       **After (esbuild):**
 
       ```
       web: bin/rails server -p 3000
-      css: bin/rails tailwindcss:watch
+      css: bin/rails tailwindcss:watch[always]
       js: yarn build --watch
-      jobs: bundle exec jobs
+      jobs: bin/jobs --mode=async
       ```
 
       ---
