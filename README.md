@@ -126,7 +126,7 @@ Background jobs, cache, and WebSocket operations powered by PostgreSQL instead o
 ### Developer Experience
 
 - **Hybrid Docker**: PostgreSQL only runs in Docker, Rails app runs natively (`bin/dev`)
-- **Procfile.dev**: Foreman runs 3 processes in parallel (web, css, jobs)
+- **Procfile.dev**: Foreman runs 3 processes in parallel (web, css with `[always]`, jobs in async mode)
 - **Testing**: Minitest (unit/integration) + Capybara (system, headless Chrome)
 - **Code Quality**: rubocop-rails-omakase (Rails official style guide) + Brakeman (security scan)
 - **Zero-Build JS**: Import Maps + Propshaft (Node.js not required)
@@ -351,7 +351,7 @@ cd test_app
 # 3. Start PostgreSQL (Docker)
 docker-compose up db -d
 
-# 4. Install dependencies + create DBs + run migrations + seed
+# 4. Install dependencies + create DBs + run migrations + seed (returns to prompt)
 bin/setup
 
 # 5. Unit/integration tests

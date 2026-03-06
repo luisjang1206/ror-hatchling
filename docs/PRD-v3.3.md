@@ -429,9 +429,13 @@ test/
 **Procfile.dev:**
 ```
 web: bin/rails server -p 3000
-css: bin/rails tailwindcss:watch
-jobs: bin/jobs
+css: bin/rails tailwindcss:watch[always]
+jobs: bin/jobs --mode=async
 ```
+
+**변경 사유:**
+- `tailwindcss:watch[always]`: foreman 환경에서 stdin이 닫혀도 watcher가 종료되지 않도록 보장
+- `--mode=async`: Ruby 3.4 + pg precompiled gem + fork 모드 조합에서 발생하는 Segmentation fault 방지
 
 ### 3.5 CI/CD (GitHub Actions)
 

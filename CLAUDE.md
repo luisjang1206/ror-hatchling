@@ -91,7 +91,7 @@ bundle exec rubocop                   # Lint (rubocop-rails-omakase)
 bundle exec brakeman                  # Security scan
 ```
 
-`Procfile.dev` runs three processes: `web` (Rails server :3000), `css` (Tailwind watcher), `jobs` (SolidQueue worker).
+`Procfile.dev` runs three processes: `web` (Rails server :3000), `css` (Tailwind watcher with `[always]` flag), `jobs` (SolidQueue worker in async mode). The `[always]` flag prevents the Tailwind watcher from terminating when stdin closes in foreman environments. The `--mode=async` flag prevents Segmentation faults with Ruby 3.4 + precompiled pg gem + fork mode.
 
 ## Architecture Decisions
 
