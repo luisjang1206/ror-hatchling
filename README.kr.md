@@ -47,17 +47,14 @@ git clone https://github.com/<org>/ror-hatchling.git
 rails new my_app -d postgresql -c tailwind -m ror-hatchling/template.rb
 ```
 
-### 생성 후 3단계 셋업
+### 생성 후 2단계 셋업
 
 ```bash
 # 1단계: PostgreSQL 17 시작 (Docker로 DB만 실행)
 docker-compose up db -d
 
-# 2단계: 의존성 설치, DB 생성, 마이그레이션, 시드 데이터
+# 2단계: 의존성 설치, DB 준비, 개발 서버 시작
 bin/setup
-
-# 3단계: 개발 서버 시작 (Foreman: Rails + Tailwind watcher + SolidQueue worker)
-bin/dev
 ```
 
 브라우저에서 `http://localhost:3000`으로 접속하면 생성된 앱을 확인할 수 있습니다.
@@ -350,8 +347,8 @@ cd test_app
 # 3. PostgreSQL 시작 (Docker)
 docker-compose up db -d
 
-# 4. 의존성 설치 + DB 생성 + 마이그레이션 + 시드 (프롬프트로 복귀)
-bin/setup
+# 4. 의존성 설치 + DB 생성 + 마이그레이션 + 시드 (서버 시작 생략)
+bin/setup --skip-server
 
 # 5. 단위/통합 테스트
 bin/rails test

@@ -47,17 +47,14 @@ git clone https://github.com/<org>/ror-hatchling.git
 rails new my_app -d postgresql -c tailwind -m ror-hatchling/template.rb
 ```
 
-### 3-Step Setup After Generation
+### 2-Step Setup After Generation
 
 ```bash
 # Step 1: Start PostgreSQL 17 (Docker runs DB only)
 docker-compose up db -d
 
-# Step 2: Install dependencies, create DBs, run migrations, seed data
+# Step 2: Install dependencies, prepare databases, and start the dev server
 bin/setup
-
-# Step 3: Start development server (Foreman: Rails + Tailwind watcher + SolidQueue worker)
-bin/dev
 ```
 
 Visit `http://localhost:3000` in your browser to see the generated app.
@@ -351,8 +348,8 @@ cd test_app
 # 3. Start PostgreSQL (Docker)
 docker-compose up db -d
 
-# 4. Install dependencies + create DBs + run migrations + seed (returns to prompt)
-bin/setup
+# 4. Install dependencies + create DBs + run migrations + seed (skip server start)
+bin/setup --skip-server
 
 # 5. Unit/integration tests
 bin/rails test
