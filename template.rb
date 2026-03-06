@@ -32,20 +32,20 @@ def say_step(number, name)
 end
 
 def create_component(name, ruby_content, erb_content, stimulus_content = nil)
-  # ViewComponent 파일 생성 헬퍼
-  # ruby_content  → app/components/{name}_component.rb
-  # erb_content   → app/components/{name}_component/{name}_component.html.erb (sidecar)
-  # stimulus_content → app/javascript/controllers/{name}_controller.js (optional)
+  # ViewComponent 파일 생성 헬퍼 (Admin 네임스페이스)
+  # ruby_content  → app/components/admin/{name}_component.rb
+  # erb_content   → app/components/admin/{name}_component/{name}_component.html.erb (sidecar)
+  # stimulus_content → app/javascript/controllers/admin/{name}_controller.js (optional)
   class_name = name.to_s.camelize
 
-  create_file "app/components/#{name}_component.rb", ruby_content
-  create_file "app/components/#{name}_component/#{name}_component.html.erb", erb_content
+  create_file "app/components/admin/#{name}_component.rb", ruby_content
+  create_file "app/components/admin/#{name}_component/#{name}_component.html.erb", erb_content
 
   if stimulus_content
-    create_file "app/javascript/controllers/#{name}_controller.js", stimulus_content
+    create_file "app/javascript/controllers/admin/#{name}_controller.js", stimulus_content
   end
 
-  say_status :component, "#{class_name}Component created", :green
+  say_status :component, "Admin::#{class_name}Component created", :green
 end
 
 def create_locale(path, content)
@@ -55,8 +55,8 @@ def create_locale(path, content)
 end
 
 def create_test(path, content)
-  # 테스트 파일 생성 헬퍼
-  create_file "test/#{path}", content
+  # 테스트 파일 생성 헬퍼 (force: 인증 제너레이터가 먼저 생성한 파일 덮어쓰기)
+  create_file "test/#{path}", content, force: true
   say_status :test, path, :green
 end
 
@@ -262,6 +262,7 @@ after_bundle do
     app/services/.keep
     app/policies/.keep
     app/components/.keep
+    app/components/admin/.keep
     db/seeds/.keep
     db/cache_migrate/.keep
     db/queue_migrate/.keep
@@ -554,7 +555,7 @@ after_bundle do
     RUBY
   end
 
-  # ApplicationComponent 베이스 클래스 (YAGNI: 최소한의 공통 기능만)
+  # ApplicationComponent 베이스 클래스 — User용 (프로젝트별 디자인 시스템)
   create_file "app/components/application_component.rb", <<~'RUBY'
     class ApplicationComponent < ViewComponent::Base
       private
@@ -565,7 +566,22 @@ after_bundle do
     end
   RUBY
 
-  # 10종 ViewComponent 생성 (PRD 2.3.2절)
+  # Admin::ApplicationComponent 베이스 클래스 — Admin UI용 (Modern Tailwind)
+  create_file "app/components/admin/application_component.rb", <<~'RUBY'
+    # frozen_string_literal: true
+
+    module Admin
+      class ApplicationComponent < ViewComponent::Base
+        private
+
+        def safe_classes(*args)
+          args.compact.join(" ")
+        end
+      end
+    end
+  RUBY
+
+  # 10종 ViewComponent 생성 (PRD 2.3.2절) — Admin:: 네임스페이스
   # 모든 Tailwind 클래스는 정적 상수(VARIANTS hash)로 정의 — 문자열 보간 금지
   # Stimulus 컨트롤러는 Step 8에서 별도 생성, 여기서는 ERB data-* 속성만 참조
 
@@ -573,7 +589,8 @@ after_bundle do
   create_component :button, <<~'RUBY', <<~'ERB'
     # frozen_string_literal: true
 
-    class ButtonComponent < ApplicationComponent
+    module Admin
+      class ButtonComponent < ApplicationComponent
       VARIANTS = {
         primary: "inline-flex items-center justify-center rounded-md bg-indigo-600 px-4 py-2 text-sm font-semibold text-white shadow-sm hover:bg-indigo-500 focus-visible:outline focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-indigo-600 disabled:opacity-50 disabled:cursor-not-allowed",
         secondary: "inline-flex items-center justify-center rounded-md bg-white px-4 py-2 text-sm font-semibold text-gray-900 shadow-sm ring-1 ring-inset ring-gray-300 hover:bg-gray-50 disabled:opacity-50 disabled:cursor-not-allowed",
@@ -595,6 +612,7 @@ after_bundle do
         safe_classes(VARIANTS[@variant], @options[:class])
       end
     end
+    end
   RUBY
     <% if @tag == :a %>
       <%= link_to @href, class: css_classes, **@options.except(:class) do %>
@@ -611,24 +629,26 @@ after_bundle do
   create_component :card, <<~'RUBY', <<~'ERB'
     # frozen_string_literal: true
 
-    class CardComponent < ApplicationComponent
-      VARIANTS = {
-        default: "rounded-lg bg-white shadow p-6",
-        bordered: "rounded-lg bg-white border border-gray-200 p-6"
-      }.freeze
+    module Admin
+      class CardComponent < ApplicationComponent
+        VARIANTS = {
+          default: "rounded-lg bg-white shadow p-6",
+          bordered: "rounded-lg bg-white border border-gray-200 p-6"
+        }.freeze
 
-      renders_one :title
-      renders_one :body
-      renders_one :footer
+        renders_one :title
+        renders_one :body
+        renders_one :footer
 
-      def initialize(variant: :default)
-        @variant = variant
-      end
+        def initialize(variant: :default)
+          @variant = variant
+        end
 
-      private
+        private
 
-      def css_classes
-        VARIANTS[@variant]
+        def css_classes
+          VARIANTS[@variant]
+        end
       end
     end
   RUBY
@@ -657,23 +677,25 @@ after_bundle do
   create_component :badge, <<~'RUBY', <<~'ERB'
     # frozen_string_literal: true
 
-    class BadgeComponent < ApplicationComponent
-      VARIANTS = {
-        success: "inline-flex items-center rounded-full bg-green-50 px-2 py-1 text-xs font-medium text-green-700 ring-1 ring-inset ring-green-600/20",
-        warning: "inline-flex items-center rounded-full bg-yellow-50 px-2 py-1 text-xs font-medium text-yellow-800 ring-1 ring-inset ring-yellow-600/20",
-        error: "inline-flex items-center rounded-full bg-red-50 px-2 py-1 text-xs font-medium text-red-700 ring-1 ring-inset ring-red-600/20",
-        info: "inline-flex items-center rounded-full bg-blue-50 px-2 py-1 text-xs font-medium text-blue-700 ring-1 ring-inset ring-blue-600/20"
-      }.freeze
+    module Admin
+      class BadgeComponent < ApplicationComponent
+        VARIANTS = {
+          success: "inline-flex items-center rounded-full bg-green-50 px-2 py-1 text-xs font-medium text-green-700 ring-1 ring-inset ring-green-600/20",
+          warning: "inline-flex items-center rounded-full bg-yellow-50 px-2 py-1 text-xs font-medium text-yellow-800 ring-1 ring-inset ring-yellow-600/20",
+          error: "inline-flex items-center rounded-full bg-red-50 px-2 py-1 text-xs font-medium text-red-700 ring-1 ring-inset ring-red-600/20",
+          info: "inline-flex items-center rounded-full bg-blue-50 px-2 py-1 text-xs font-medium text-blue-700 ring-1 ring-inset ring-blue-600/20"
+        }.freeze
 
-      def initialize(variant: :info, label:)
-        @variant = variant
-        @label = label
-      end
+        def initialize(variant: :info, label:)
+          @variant = variant
+          @label = label
+        end
 
-      private
+        private
 
-      def css_classes
-        VARIANTS[@variant]
+        def css_classes
+          VARIANTS[@variant]
+        end
       end
     end
   RUBY
@@ -684,47 +706,49 @@ after_bundle do
   create_component :flash, <<~'RUBY', <<~'ERB'
     # frozen_string_literal: true
 
-    class FlashComponent < ApplicationComponent
-      VARIANTS = {
-        notice: "border-l-4 border-green-400 bg-green-50 p-4 text-green-800",
-        alert: "border-l-4 border-yellow-400 bg-yellow-50 p-4 text-yellow-800",
-        error: "border-l-4 border-red-400 bg-red-50 p-4 text-red-800"
-      }.freeze
+    module Admin
+      class FlashComponent < ApplicationComponent
+        VARIANTS = {
+          notice: "border-l-4 border-green-400 bg-green-50 p-4 text-green-800",
+          alert: "border-l-4 border-yellow-400 bg-yellow-50 p-4 text-yellow-800",
+          error: "border-l-4 border-red-400 bg-red-50 p-4 text-red-800"
+        }.freeze
 
-      # notice/alert는 Rails 표준, error는 추가
-      VARIANT_MAPPING = {
-        "notice" => :notice,
-        "alert" => :alert,
-        "error" => :error
-      }.freeze
+        # notice/alert는 Rails 표준, error는 추가
+        VARIANT_MAPPING = {
+          "notice" => :notice,
+          "alert" => :alert,
+          "error" => :error
+        }.freeze
 
-      def initialize(flash:)
-        @flash = flash
-      end
+        def initialize(flash:)
+          @flash = flash
+        end
 
-      def render?
-        @flash.any?
-      end
+        def render?
+          @flash.any?
+        end
 
-      private
+        private
 
-      def variant_for(type)
-        VARIANT_MAPPING[type.to_s] || :notice
-      end
+        def variant_for(type)
+          VARIANT_MAPPING[type.to_s] || :notice
+        end
 
-      def css_classes_for(type)
-        VARIANTS[variant_for(type)]
+        def css_classes_for(type)
+          VARIANTS[variant_for(type)]
+        end
       end
     end
   RUBY
     <div class="space-y-2">
       <% @flash.each do |type, message| %>
         <div class="<%= css_classes_for(type) %> flex items-center justify-between rounded-md"
-             data-controller="flash"
-             data-flash-duration-value="5000"
-             data-flash-hidden-class="hidden">
+             data-controller="admin--flash"
+             data-admin--flash-duration-value="5000"
+             data-admin--flash-hidden-class="hidden">
           <p class="text-sm font-medium"><%= message %></p>
-          <button type="button" data-action="click->flash#dismiss" class="ml-4 inline-flex shrink-0 rounded-md p-1.5 hover:bg-black/5 focus:outline-none">
+          <button type="button" data-action="click->admin--flash#dismiss" class="ml-4 inline-flex shrink-0 rounded-md p-1.5 hover:bg-black/5 focus:outline-none">
             <span class="sr-only"><%= t("defaults.buttons.close") %></span>
             <svg class="h-4 w-4" fill="currentColor" viewBox="0 0 20 20">
               <path fill-rule="evenodd" d="M4.293 4.293a1 1 0 011.414 0L10 8.586l4.293-4.293a1 1 0 111.414 1.414L11.414 10l4.293 4.293a1 1 0 01-1.414 1.414L10 11.414l-4.293 4.293a1 1 0 01-1.414-1.414L8.586 10 4.293 5.707a1 1 0 010-1.414z" clip-rule="evenodd"/>
@@ -739,29 +763,31 @@ after_bundle do
   create_component :modal, <<~'RUBY', <<~'ERB'
     # frozen_string_literal: true
 
-    class ModalComponent < ApplicationComponent
-      renders_one :trigger
-      renders_one :body
+    module Admin
+      class ModalComponent < ApplicationComponent
+        renders_one :trigger
+        renders_one :body
+      end
     end
   RUBY
-    <div data-controller="modal">
+    <div data-controller="admin--modal">
       <% if trigger? %>
-        <div data-action="click->modal#open">
+        <div data-action="click->admin--modal#open">
           <%= trigger %>
         </div>
       <% end %>
 
       <%# dialogTarget이 backdrop 겸 scroll container 역할 %>
       <%# closeOnBackdrop: event.target === dialogTarget일 때만 닫힘 (패널 내부 클릭은 무시) %>
-      <div data-modal-target="dialog"
-           data-action="click->modal#closeOnBackdrop"
+      <div data-admin--modal-target="dialog"
+           data-action="click->admin--modal#closeOnBackdrop"
            class="hidden fixed inset-0 z-50 flex min-h-full items-center justify-center overflow-y-auto bg-gray-500/75 p-4"
            aria-modal="true"
            role="dialog">
         <div class="relative w-full max-w-lg rounded-lg bg-white p-6 shadow-xl">
           <%# Close button %>
           <div class="absolute right-4 top-4">
-            <button type="button" data-action="click->modal#close" class="rounded-md text-gray-400 hover:text-gray-500 focus:outline-none">
+            <button type="button" data-action="click->admin--modal#close" class="rounded-md text-gray-400 hover:text-gray-500 focus:outline-none">
               <span class="sr-only"><%= t("defaults.buttons.close") %></span>
               <svg class="h-5 w-5" fill="currentColor" viewBox="0 0 20 20">
                 <path fill-rule="evenodd" d="M4.293 4.293a1 1 0 011.414 0L10 8.586l4.293-4.293a1 1 0 111.414 1.414L11.414 10l4.293 4.293a1 1 0 01-1.414 1.414L10 11.414l-4.293 4.293a1 1 0 01-1.414-1.414L8.586 10 4.293 5.707a1 1 0 010-1.414z" clip-rule="evenodd"/>
@@ -781,19 +807,21 @@ after_bundle do
   create_component :dropdown, <<~'RUBY', <<~'ERB'
     # frozen_string_literal: true
 
-    class DropdownComponent < ApplicationComponent
-      renders_one :trigger
-      renders_many :items
+    module Admin
+      class DropdownComponent < ApplicationComponent
+        renders_one :trigger
+        renders_many :items
+      end
     end
   RUBY
-    <div data-controller="dropdown" data-dropdown-hidden-class="hidden" class="relative inline-block text-left">
+    <div data-controller="admin--dropdown" data-admin--dropdown-hidden-class="hidden" class="relative inline-block text-left">
       <% if trigger? %>
-        <div data-action="click->dropdown#toggle">
+        <div data-action="click->admin--dropdown#toggle">
           <%= trigger %>
         </div>
       <% end %>
 
-      <div data-dropdown-target="menu"
+      <div data-admin--dropdown-target="menu"
            class="hidden absolute right-0 z-10 mt-2 w-48 origin-top-right rounded-md bg-white shadow-lg ring-1 ring-black/5 focus:outline-none"
            role="menu"
            aria-orientation="vertical">
@@ -810,37 +838,39 @@ after_bundle do
   create_component :form_field, <<~'RUBY', <<~'ERB'
     # frozen_string_literal: true
 
-    class FormFieldComponent < ApplicationComponent
-      INPUT_CLASSES = "block w-full rounded-md border-0 py-1.5 text-gray-900 shadow-sm ring-1 ring-inset ring-gray-300 placeholder:text-gray-400 focus:ring-2 focus:ring-inset focus:ring-indigo-600 sm:text-sm sm:leading-6"
-      INPUT_ERROR_CLASSES = "block w-full rounded-md border-0 py-1.5 text-gray-900 shadow-sm ring-1 ring-inset ring-red-500 placeholder:text-gray-400 focus:ring-2 focus:ring-inset focus:ring-red-600 sm:text-sm sm:leading-6"
-      LABEL_CLASSES = "block text-sm font-medium leading-6 text-gray-900"
-      ERROR_CLASSES = "mt-1 text-sm text-red-600"
+    module Admin
+      class FormFieldComponent < ApplicationComponent
+        INPUT_CLASSES = "block w-full rounded-md border-0 py-1.5 text-gray-900 shadow-sm ring-1 ring-inset ring-gray-300 placeholder:text-gray-400 focus:ring-2 focus:ring-inset focus:ring-indigo-600 sm:text-sm sm:leading-6"
+        INPUT_ERROR_CLASSES = "block w-full rounded-md border-0 py-1.5 text-gray-900 shadow-sm ring-1 ring-inset ring-red-500 placeholder:text-gray-400 focus:ring-2 focus:ring-inset focus:ring-red-600 sm:text-sm sm:leading-6"
+        LABEL_CLASSES = "block text-sm font-medium leading-6 text-gray-900"
+        ERROR_CLASSES = "mt-1 text-sm text-red-600"
 
-      def initialize(form:, field_name:, type: :text, label: nil, error_messages: nil, required: false, options: nil, **input_options)
-        @form = form
-        @field_name = field_name
-        @type = type
-        @label = label
-        @error_messages = error_messages
-        @required = required
-        @options = options
-        @input_options = input_options
-      end
+        def initialize(form:, field_name:, type: :text, label: nil, error_messages: nil, required: false, options: nil, **input_options)
+          @form = form
+          @field_name = field_name
+          @type = type
+          @label = label
+          @error_messages = error_messages
+          @required = required
+          @options = options
+          @input_options = input_options
+        end
 
-      private
+        private
 
-      def has_errors?
-        @error_messages.present?
-      end
+        def has_errors?
+          @error_messages.present?
+        end
 
-      def input_css_classes
-        has_errors? ? INPUT_ERROR_CLASSES : INPUT_CLASSES
+        def input_css_classes
+          has_errors? ? INPUT_ERROR_CLASSES : INPUT_CLASSES
+        end
       end
     end
   RUBY
     <div>
       <% if @label %>
-        <%= @form.label @field_name, @label, class: FormFieldComponent::LABEL_CLASSES %>
+        <%= @form.label @field_name, @label, class: Admin::FormFieldComponent::LABEL_CLASSES %>
       <% end %>
 
       <div class="mt-1">
@@ -860,7 +890,7 @@ after_bundle do
 
       <% if has_errors? %>
         <% Array(@error_messages).each do |message| %>
-          <p class="<%= FormFieldComponent::ERROR_CLASSES %>"><%= message %></p>
+          <p class="<%= Admin::FormFieldComponent::ERROR_CLASSES %>"><%= message %></p>
         <% end %>
       <% end %>
     </div>
@@ -870,12 +900,14 @@ after_bundle do
   create_component :empty_state, <<~'RUBY', <<~'ERB'
     # frozen_string_literal: true
 
-    class EmptyStateComponent < ApplicationComponent
-      renders_one :icon
-      renders_one :action
+    module Admin
+      class EmptyStateComponent < ApplicationComponent
+        renders_one :icon
+        renders_one :action
 
-      def initialize(message:)
-        @message = message
+        def initialize(message:)
+          @message = message
+        end
       end
     end
   RUBY
@@ -902,13 +934,15 @@ after_bundle do
   create_component :pagination, <<~'RUBY', <<~'ERB'
     # frozen_string_literal: true
 
-    class PaginationComponent < ApplicationComponent
-      def initialize(pagy:)
-        @pagy = pagy
-      end
+    module Admin
+      class PaginationComponent < ApplicationComponent
+        def initialize(pagy:)
+          @pagy = pagy
+        end
 
-      def render?
-        @pagy.pages > 1
+        def render?
+          @pagy.pages > 1
+        end
       end
     end
   RUBY
@@ -921,19 +955,21 @@ after_bundle do
   create_component :navbar, <<~'RUBY', <<~'ERB'
     # frozen_string_literal: true
 
-    class NavbarComponent < ApplicationComponent
-      def initialize(user: nil)
-        @user = user
-      end
+    module Admin
+      class NavbarComponent < ApplicationComponent
+        def initialize(user: nil)
+          @user = user
+        end
 
-      private
+        private
 
-      def signed_in?
-        @user.present?
+        def signed_in?
+          @user.present?
+        end
       end
     end
   RUBY
-    <nav class="bg-white shadow" data-controller="navbar" data-navbar-hidden-class="hidden">
+    <nav class="bg-white shadow" data-controller="admin--navbar" data-admin--navbar-hidden-class="hidden">
       <div class="mx-auto max-w-7xl px-4 sm:px-6 lg:px-8">
         <div class="flex h-16 justify-between">
           <%# Logo / Home link %>
@@ -955,7 +991,7 @@ after_bundle do
           <%# Mobile hamburger button %>
           <div class="flex items-center sm:hidden">
             <button type="button"
-                    data-action="click->navbar#toggle"
+                    data-action="click->admin--navbar#toggle"
                     class="inline-flex items-center justify-center rounded-md p-2 text-gray-400 hover:bg-gray-100 hover:text-gray-500 focus:outline-none"
                     aria-expanded="false">
               <span class="sr-only">Open main menu</span>
@@ -968,7 +1004,7 @@ after_bundle do
       </div>
 
       <%# Mobile menu %>
-      <div data-navbar-target="menu" class="hidden sm:hidden">
+      <div data-admin--navbar-target="menu" class="hidden sm:hidden">
         <div class="space-y-1 px-2 pb-3 pt-2">
           <% if signed_in? %>
             <%= link_to t("defaults.navigation.dashboard"), root_path, class: "block rounded-md px-3 py-2 text-base font-medium text-gray-700 hover:bg-gray-100 hover:text-gray-900" %>
@@ -990,7 +1026,7 @@ after_bundle do
   say_step 8, "Stimulus 컨트롤러 4종"
 
   # flash_controller.js — auto-dismiss + manual dismiss
-  create_file "app/javascript/controllers/flash_controller.js", <<~'JS'
+  create_file "app/javascript/controllers/admin/flash_controller.js", <<~'JS'
     import { Controller } from "@hotwired/stimulus"
 
     export default class extends Controller {
@@ -1018,7 +1054,7 @@ after_bundle do
   JS
 
   # modal_controller.js — open/close + ESC key + backdrop click
-  create_file "app/javascript/controllers/modal_controller.js", <<~'JS'
+  create_file "app/javascript/controllers/admin/modal_controller.js", <<~'JS'
     import { Controller } from "@hotwired/stimulus"
 
     export default class extends Controller {
@@ -1055,7 +1091,7 @@ after_bundle do
   JS
 
   # dropdown_controller.js — toggle + outside click close
-  create_file "app/javascript/controllers/dropdown_controller.js", <<~'JS'
+  create_file "app/javascript/controllers/admin/dropdown_controller.js", <<~'JS'
     import { Controller } from "@hotwired/stimulus"
 
     export default class extends Controller {
@@ -1086,7 +1122,7 @@ after_bundle do
   JS
 
   # navbar_controller.js — mobile menu toggle
-  create_file "app/javascript/controllers/navbar_controller.js", <<~'JS'
+  create_file "app/javascript/controllers/admin/navbar_controller.js", <<~'JS'
     import { Controller } from "@hotwired/stimulus"
 
     export default class extends Controller {
@@ -1461,22 +1497,24 @@ after_bundle do
 
   say_step "5b", "레이아웃 업데이트 및 Tailwind @source"
 
-  # application.html.erb에 NavbarComponent + FlashComponent 렌더링 추가
+  # application.html.erb에 최소 flash 메시지만 추가 (컴포넌트 미사용)
+  # NavbarComponent는 Admin 전용 → User 뷰는 프로젝트별 디자인 시스템 적용
   inject_into_file "app/views/layouts/application.html.erb",
     after: "<body>\n" do
     <<~'ERB'
-        <%= render(NavbarComponent.new(user: Current.user)) %>
-        <%= render(FlashComponent.new(flash: flash)) if flash.any? %>
+        <% flash.each do |type, message| %>
+          <p class="<%= type %>"><%= message %></p>
+        <% end %>
     ERB
   end
 
   # Tailwind CSS v4 @source 디렉티브 추가
-  # ViewComponent 파일의 Tailwind 클래스 스캐닝 명시적 보장
-  # Tailwind v4는 자동 스캐닝하지만, @source로 확실히 포함시킴
+  # Admin 컴포넌트 + 향후 User 컴포넌트 모두 Tailwind 클래스 스캐닝 보장
   # 경로: app/assets/tailwind/application.css → ../../components = app/components
   inject_into_file "app/assets/tailwind/application.css",
     before: '@import "tailwindcss"' do
     <<~'CSS'
+      @source "../../components/admin";
       @source "../../components";
     CSS
   end
@@ -1649,7 +1687,7 @@ after_bundle do
 
         <%# 메인 콘텐츠 %>
         <main class="flex-1 p-8">
-          <%= render(FlashComponent.new(flash: flash)) if flash.any? %>
+          <%= render(Admin::FlashComponent.new(flash: flash)) if flash.any? %>
           <%= yield %>
         </main>
       </div>
@@ -1697,14 +1735,14 @@ after_bundle do
     end
   RUBY
 
-  # Admin 대시보드 뷰 — 통계 카드 (CardComponent 재활용)
+  # Admin 대시보드 뷰 — 통계 카드 (Admin::CardComponent 사용)
   create_file "app/views/admin/dashboard/show.html.erb", <<~'ERB'
     <% content_for(:title) { t("admin.dashboard.title") } %>
 
     <h1 class="text-2xl font-bold text-gray-900 mb-8"><%= t("admin.dashboard.title") %></h1>
 
     <div class="grid grid-cols-1 md:grid-cols-3 gap-6 mb-8">
-      <%= render(CardComponent.new) do |card| %>
+      <%= render(Admin::CardComponent.new) do |card| %>
         <% card.with_title { t("admin.dashboard.total_users") } %>
         <% card.with_body do %>
           <p class="text-3xl font-bold text-blue-600"><%= @user_count %></p>
@@ -1730,7 +1768,7 @@ after_bundle do
                 <%= link_to user.email_address, admin_user_path(user), class: "text-blue-600 hover:underline" %>
               </td>
               <td class="px-6 py-4 whitespace-nowrap">
-                <%= render(BadgeComponent.new(label: user.role.humanize, variant: user.super_admin? ? :error : user.admin? ? :warning : :info)) %>
+                <%= render(Admin::BadgeComponent.new(label: user.role.humanize, variant: user.super_admin? ? :error : user.admin? ? :warning : :info)) %>
               </td>
               <td class="px-6 py-4 whitespace-nowrap text-sm text-gray-500"><%= l(user.created_at, format: :short) %></td>
             </tr>
@@ -1762,7 +1800,7 @@ after_bundle do
                 <%= link_to user.email_address, admin_user_path(user), class: "text-blue-600 hover:underline" %>
               </td>
               <td class="px-6 py-4 whitespace-nowrap">
-                <%= render(BadgeComponent.new(label: user.role.humanize, variant: user.super_admin? ? :error : user.admin? ? :warning : :info)) %>
+                <%= render(Admin::BadgeComponent.new(label: user.role.humanize, variant: user.super_admin? ? :error : user.admin? ? :warning : :info)) %>
               </td>
               <td class="px-6 py-4 whitespace-nowrap text-sm text-gray-500"><%= l(user.created_at, format: :short) %></td>
             </tr>
@@ -1771,7 +1809,7 @@ after_bundle do
       </table>
     </div>
 
-    <%= render(PaginationComponent.new(pagy: @pagy)) %>
+    <%= render(Admin::PaginationComponent.new(pagy: @pagy)) %>
   ERB
 
   # Admin 사용자 상세 뷰 — BadgeComponent로 역할 표시
@@ -1785,7 +1823,7 @@ after_bundle do
     <div class="bg-white shadow rounded-lg p-6">
       <div class="flex items-center justify-between mb-6">
         <h1 class="text-2xl font-bold text-gray-900"><%= @user.email_address %></h1>
-        <%= render(BadgeComponent.new(label: @user.role.humanize, variant: @user.super_admin? ? :error : @user.admin? ? :warning : :info)) %>
+        <%= render(Admin::BadgeComponent.new(label: @user.role.humanize, variant: @user.super_admin? ? :error : @user.admin? ? :warning : :info)) %>
       </div>
 
       <dl class="grid grid-cols-1 gap-4 sm:grid-cols-2">
@@ -2035,7 +2073,7 @@ after_bundle do
 
   say_step 15, "GitHub Actions CI"
 
-  create_file ".github/workflows/ci.yml" do
+  create_file ".github/workflows/ci.yml", force: true do
     <<~'YAML'
       name: CI
 
@@ -2363,20 +2401,17 @@ after_bundle do
       - Docker (for PostgreSQL 17 only — the Rails app runs natively)
       - Bundler 2.x
 
-      ### Three-Step Setup
+      ### Two-Step Setup
 
       ```bash
       # Step 1: Start PostgreSQL 17 via Docker (DB only)
       docker-compose up db -d
 
-      # Step 2: Install dependencies, create databases, run migrations, seed data
+      # Step 2: Install dependencies, prepare databases, and start the dev server
       bin/setup
-
-      # Step 3: Start the development server
-      bin/dev
       ```
 
-      `bin/dev` uses Foreman to run three processes in parallel via `Procfile.dev`:
+      `bin/setup` automatically launches `bin/dev` at the end, which uses Foreman to run three processes in parallel via `Procfile.dev`:
 
       | Process | Command | Description |
       |---|---|---|
@@ -2401,83 +2436,83 @@ after_bundle do
 
       ---
 
-      ## C. UI Components (ViewComponent)
+      ## C. Admin UI Components (ViewComponent)
 
-      Ten pre-built ViewComponents are included under `app/components/`. All components inherit from `ApplicationComponent < ViewComponent::Base` and use Tailwind CSS utility classes directly — no external UI library dependency.
+      Ten pre-built ViewComponents are included under `app/components/admin/`. All components are namespaced under `Admin::` and inherit from `Admin::ApplicationComponent < ViewComponent::Base`. These components use Tailwind CSS utility classes directly and are intended for admin views. User-facing views start with a clean slate — create project-specific components in `app/components/`.
 
-      ### 1. ButtonComponent
+      ### 1. Admin::ButtonComponent
 
       Renders a `<button>` or `<a>` tag with three visual variants.
 
       **Variants:** `primary` (indigo), `secondary` (white/ring), `danger` (red)
 
       ```erb
-      <%= render ButtonComponent.new(variant: :primary) do %>
+      <%= render Admin::ButtonComponent.new(variant: :primary) do %>
         Save Changes
       <% end %>
 
-      <%= render ButtonComponent.new(variant: :danger, tag: :a, href: delete_path) do %>
+      <%= render Admin::ButtonComponent.new(variant: :danger, tag: :a, href: delete_path) do %>
         Delete
       <% end %>
       ```
 
-      ### 2. CardComponent
+      ### 2. Admin::CardComponent
 
       A container component with optional `title`, `body`, and `footer` slots.
 
       **Variants:** `default` (white with shadow), `bordered` (white with border)
 
       ```erb
-      <%= render CardComponent.new(variant: :bordered) do |c| %>
+      <%= render Admin::CardComponent.new(variant: :bordered) do |c| %>
         <% c.with_title { "Card Title" } %>
         <% c.with_body  { "Card content goes here." } %>
       <% end %>
       ```
 
-      ### 3. BadgeComponent
+      ### 3. Admin::BadgeComponent
 
       A compact inline label for status indicators. Requires a `label:` argument.
 
       **Variants:** `info` (blue), `success` (green), `warning` (yellow), `error` (red)
 
       ```erb
-      <%= render BadgeComponent.new(variant: :success, label: "Active") %>
-      <%= render BadgeComponent.new(variant: :warning, label: "Pending") %>
+      <%= render Admin::BadgeComponent.new(variant: :success, label: "Active") %>
+      <%= render Admin::BadgeComponent.new(variant: :warning, label: "Pending") %>
       ```
 
-      ### 4. FlashComponent
+      ### 4. Admin::FlashComponent
 
-      Renders all Rails flash messages (notice, alert, error) with auto-dismiss via the `flash` Stimulus controller. Skips rendering when the flash hash is empty.
+      Renders all Rails flash messages (notice, alert, error) with auto-dismiss via the `admin--flash` Stimulus controller. Skips rendering when the flash hash is empty.
 
       ```erb
-      <%# In application layout — pass the flash hash directly %>
-      <%= render FlashComponent.new(flash: flash) %>
+      <%# In admin layout — pass the flash hash directly %>
+      <%= render Admin::FlashComponent.new(flash: flash) %>
       ```
 
-      ### 5. ModalComponent
+      ### 5. Admin::ModalComponent
 
-      A dialog overlay managed by the `modal` Stimulus controller. Supports a `trigger` slot (the element that opens the modal) and a `body` slot (modal content). Closes on backdrop click.
+      A dialog overlay managed by the `admin--modal` Stimulus controller. Supports a `trigger` slot (the element that opens the modal) and a `body` slot (modal content). Closes on backdrop click.
 
       ```erb
-      <%= render ModalComponent.new do |m| %>
-        <% m.with_trigger { render ButtonComponent.new { "Open Modal" } } %>
+      <%= render Admin::ModalComponent.new do |m| %>
+        <% m.with_trigger { render Admin::ButtonComponent.new { "Open Modal" } } %>
         <% m.with_body    { "Modal content here." } %>
       <% end %>
       ```
 
-      ### 6. DropdownComponent
+      ### 6. Admin::DropdownComponent
 
-      A relative-positioned dropdown menu managed by the `dropdown` Stimulus controller. Accepts a `trigger` slot and multiple `items` slots.
+      A relative-positioned dropdown menu managed by the `admin--dropdown` Stimulus controller. Accepts a `trigger` slot and multiple `items` slots.
 
       ```erb
-      <%= render DropdownComponent.new do |d| %>
+      <%= render Admin::DropdownComponent.new do |d| %>
         <% d.with_trigger { "Menu" } %>
         <% d.with_items   { link_to "Profile", profile_path, role: "menuitem" } %>
         <% d.with_items   { link_to "Sign out", session_path, data: { turbo_method: :delete }, role: "menuitem" } %>
       <% end %>
       ```
 
-      ### 7. FormFieldComponent
+      ### 7. Admin::FormFieldComponent
 
       Wraps a `form_with` field with a label, styled input, and inline validation error messages. Applies error ring styles automatically when `error_messages` are present.
 
@@ -2485,7 +2520,7 @@ after_bundle do
 
       ```erb
       <%= form_with model: @user do |f| %>
-        <%= render FormFieldComponent.new(
+        <%= render Admin::FormFieldComponent.new(
               form: f, field_name: :email, type: :email,
               label: "Email address",
               error_messages: @user.errors[:email],
@@ -2493,32 +2528,32 @@ after_bundle do
       <% end %>
       ```
 
-      ### 8. EmptyStateComponent
+      ### 8. Admin::EmptyStateComponent
 
       A centered empty-state display with an optional `icon` slot and `action` slot (for a CTA button).
 
       ```erb
-      <%= render EmptyStateComponent.new(message: "No records found.") do |e| %>
-        <% e.with_action { render ButtonComponent.new { "Create your first record" } } %>
+      <%= render Admin::EmptyStateComponent.new(message: "No records found.") do |e| %>
+        <% e.with_action { render Admin::ButtonComponent.new { "Create your first record" } } %>
       <% end %>
       ```
 
-      ### 9. PaginationComponent
+      ### 9. Admin::PaginationComponent
 
       Renders a Pagy navigation bar. Skips rendering automatically when there is only one page (`pagy.pages <= 1`).
 
       ```erb
       <%# Controller: @pagy, @records = pagy(Record.all) %>
-      <%= render PaginationComponent.new(pagy: @pagy) %>
+      <%= render Admin::PaginationComponent.new(pagy: @pagy) %>
       ```
 
-      ### 10. NavbarComponent
+      ### 10. Admin::NavbarComponent
 
-      A responsive navigation bar with desktop links and a mobile hamburger menu, managed by the `navbar` Stimulus controller. Conditionally renders authenticated vs. unauthenticated links based on the `user:` argument.
+      A responsive navigation bar with desktop links and a mobile hamburger menu, managed by the `admin--navbar` Stimulus controller. Conditionally renders authenticated vs. unauthenticated links based on the `user:` argument.
 
       ```erb
-      <%# In application layout %>
-      <%= render NavbarComponent.new(user: Current.user) %>
+      <%# In admin layout %>
+      <%= render Admin::NavbarComponent.new(user: Current.user) %>
       ```
 
       ---
@@ -2549,7 +2584,7 @@ after_bundle do
       |---|---|
       | `test/models/` | Model unit tests |
       | `test/policies/` | Pundit policy tests |
-      | `test/components/` | ViewComponent unit tests |
+      | `test/components/admin/` | Admin ViewComponent unit tests |
       | `test/integration/` | Controller and request integration tests |
       | `test/system/` | End-to-end browser tests (Capybara) |
 
@@ -2646,18 +2681,20 @@ after_bundle do
       ```
       my_app/
       ├── app/
-      │   ├── components/              # ViewComponent (10 components)
-      │   │   ├── application_component.rb
-      │   │   ├── button_component.rb
-      │   │   ├── card_component.rb
-      │   │   ├── badge_component.rb
-      │   │   ├── flash_component.rb
-      │   │   ├── modal_component.rb
-      │   │   ├── dropdown_component.rb
-      │   │   ├── form_field_component.rb
-      │   │   ├── empty_state_component.rb
-      │   │   ├── pagination_component.rb
-      │   │   └── navbar_component.rb
+      │   ├── components/
+      │   │   ├── application_component.rb  # User-facing base class
+      │   │   └── admin/                    # Admin UI components (10 components)
+      │   │       ├── application_component.rb
+      │   │       ├── button_component.rb
+      │   │       ├── card_component.rb
+      │   │       ├── badge_component.rb
+      │   │       ├── flash_component.rb
+      │   │       ├── modal_component.rb
+      │   │       ├── dropdown_component.rb
+      │   │       ├── form_field_component.rb
+      │   │       ├── empty_state_component.rb
+      │   │       ├── pagination_component.rb
+      │   │       └── navbar_component.rb
       │   ├── controllers/
       │   │   ├── admin/               # Admin namespace (Pundit role checks)
       │   │   ├── application_controller.rb
@@ -2665,11 +2702,12 @@ after_bundle do
       │   │   ├── sessions_controller.rb        # Rails 8 auth generator
       │   │   └── passwords_controller.rb       # Rails 8 auth generator
       │   ├── javascript/
-      │   │   └── controllers/         # Stimulus controllers
-      │   │       ├── flash_controller.js
-      │   │       ├── modal_controller.js
-      │   │       ├── dropdown_controller.js
-      │   │       └── navbar_controller.js
+      │   │   └── controllers/
+      │   │       └── admin/           # Admin Stimulus controllers
+      │   │           ├── flash_controller.js
+      │   │           ├── modal_controller.js
+      │   │           ├── dropdown_controller.js
+      │   │           └── navbar_controller.js
       │   ├── models/
       │   │   ├── current.rb
       │   │   └── user.rb              # Role enum, password validation
@@ -2698,7 +2736,8 @@ after_bundle do
       │       ├── admin_user.rb
       │       └── sample_data.rb
       ├── test/
-      │   ├── components/              # ViewComponent tests
+      │   ├── components/
+      │   │   └── admin/              # Admin ViewComponent tests
       │   ├── integration/
       │   ├── models/
       │   ├── policies/                # Pundit policy tests
@@ -3061,6 +3100,11 @@ after_bundle do
   # Estimated: ~400 lines of actual content
   # -------------------------------------------------------------------------
 
+  # Fix: Ruby 3.4 + precompiled pg gem causes Segfault with parallel tests (both fork and thread modes)
+  gsub_file "test/test_helper.rb",
+    "parallelize(workers: :number_of_processors)",
+    "parallelize(workers: 1)"
+
   # Phase 2: Fixtures + User 모델 테스트
   create_file "test/fixtures/users.yml", force: true do
     <<~'YAML'
@@ -3272,300 +3316,321 @@ after_bundle do
   end
 
   # Phase 3: ViewComponent 테스트 10종 + HealthController 테스트
+  # 모든 컴포넌트 테스트는 Admin:: 네임스페이스 하위
 
-  create_test "components/button_component_test.rb", <<~'RUBY'
+  create_test "components/admin/button_component_test.rb", <<~'RUBY'
     require "test_helper"
 
-    class ButtonComponentTest < ViewComponent::TestCase
-      test "renders primary button by default" do
-        render_inline(ButtonComponent.new) { "Click me" }
-        assert_selector("button[type='button']", text: "Click me")
-        assert_selector("button.bg-indigo-600")
-      end
+    module Admin
+      class ButtonComponentTest < ViewComponent::TestCase
+        test "renders primary button by default" do
+          render_inline(Admin::ButtonComponent.new) { "Click me" }
+          assert_selector("button[type='button']", text: "Click me")
+          assert_selector("button.bg-indigo-600")
+        end
 
-      test "renders secondary variant" do
-        render_inline(ButtonComponent.new(variant: :secondary)) { "Cancel" }
-        assert_selector("button.ring-1")
-        assert_no_selector("button.bg-indigo-600")
-      end
+        test "renders secondary variant" do
+          render_inline(Admin::ButtonComponent.new(variant: :secondary)) { "Cancel" }
+          assert_selector("button.ring-1")
+          assert_no_selector("button.bg-indigo-600")
+        end
 
-      test "renders danger variant" do
-        render_inline(ButtonComponent.new(variant: :danger)) { "Delete" }
-        assert_selector("button.bg-red-600")
-      end
+        test "renders danger variant" do
+          render_inline(Admin::ButtonComponent.new(variant: :danger)) { "Delete" }
+          assert_selector("button.bg-red-600")
+        end
 
-      test "renders as link when tag is :a" do
-        render_inline(ButtonComponent.new(tag: :a, href: "/path")) { "Link" }
-        assert_selector("a[href='/path']", text: "Link")
-        assert_no_selector("button")
-      end
+        test "renders as link when tag is :a" do
+          render_inline(Admin::ButtonComponent.new(tag: :a, href: "/path")) { "Link" }
+          assert_selector("a[href='/path']", text: "Link")
+          assert_no_selector("button")
+        end
 
-      test "renders disabled button" do
-        render_inline(ButtonComponent.new(disabled: true)) { "Disabled" }
-        assert_selector("button[disabled]")
+        test "renders disabled button" do
+          render_inline(Admin::ButtonComponent.new(disabled: true)) { "Disabled" }
+          assert_selector("button[disabled]")
+        end
       end
     end
   RUBY
 
-  create_test "components/card_component_test.rb", <<~'RUBY'
+  create_test "components/admin/card_component_test.rb", <<~'RUBY'
     require "test_helper"
 
-    class CardComponentTest < ViewComponent::TestCase
-      test "renders default card with shadow" do
-        render_inline(CardComponent.new) do |card|
-          card.with_body { "Content" }
+    module Admin
+      class CardComponentTest < ViewComponent::TestCase
+        test "renders default card with shadow" do
+          render_inline(Admin::CardComponent.new) do |card|
+            card.with_body { "Content" }
+          end
+          assert_selector("div.shadow", text: "Content")
         end
-        assert_selector("div.shadow", text: "Content")
-      end
 
-      test "renders bordered variant" do
-        render_inline(CardComponent.new(variant: :bordered)) do |card|
-          card.with_body { "Content" }
+        test "renders bordered variant" do
+          render_inline(Admin::CardComponent.new(variant: :bordered)) do |card|
+            card.with_body { "Content" }
+          end
+          assert_selector("div.border")
         end
-        assert_selector("div.border")
-      end
 
-      test "renders title slot" do
-        render_inline(CardComponent.new) do |card|
-          card.with_title { "Title" }
-          card.with_body { "Body" }
+        test "renders title slot" do
+          render_inline(Admin::CardComponent.new) do |card|
+            card.with_title { "Title" }
+            card.with_body { "Body" }
+          end
+          assert_selector("div.font-semibold", text: "Title")
         end
-        assert_selector("div.font-semibold", text: "Title")
-      end
 
-      test "renders footer slot" do
-        render_inline(CardComponent.new) do |card|
-          card.with_body { "Body" }
-          card.with_footer { "Footer" }
+        test "renders footer slot" do
+          render_inline(Admin::CardComponent.new) do |card|
+            card.with_body { "Body" }
+            card.with_footer { "Footer" }
+          end
+          assert_selector("div.border-t", text: "Footer")
         end
-        assert_selector("div.border-t", text: "Footer")
       end
     end
   RUBY
 
-  create_test "components/badge_component_test.rb", <<~'RUBY'
+  create_test "components/admin/badge_component_test.rb", <<~'RUBY'
     require "test_helper"
 
-    class BadgeComponentTest < ViewComponent::TestCase
-      test "renders info badge by default" do
-        render_inline(BadgeComponent.new(label: "New"))
-        assert_selector("span.bg-blue-50", text: "New")
-      end
+    module Admin
+      class BadgeComponentTest < ViewComponent::TestCase
+        test "renders info badge by default" do
+          render_inline(Admin::BadgeComponent.new(label: "New"))
+          assert_selector("span.bg-blue-50", text: "New")
+        end
 
-      test "renders success badge" do
-        render_inline(BadgeComponent.new(variant: :success, label: "Active"))
-        assert_selector("span.bg-green-50", text: "Active")
-      end
+        test "renders success badge" do
+          render_inline(Admin::BadgeComponent.new(variant: :success, label: "Active"))
+          assert_selector("span.bg-green-50", text: "Active")
+        end
 
-      test "renders warning badge" do
-        render_inline(BadgeComponent.new(variant: :warning, label: "Pending"))
-        assert_selector("span.bg-yellow-50", text: "Pending")
-      end
+        test "renders warning badge" do
+          render_inline(Admin::BadgeComponent.new(variant: :warning, label: "Pending"))
+          assert_selector("span.bg-yellow-50", text: "Pending")
+        end
 
-      test "renders error badge" do
-        render_inline(BadgeComponent.new(variant: :error, label: "Failed"))
-        assert_selector("span.bg-red-50", text: "Failed")
+        test "renders error badge" do
+          render_inline(Admin::BadgeComponent.new(variant: :error, label: "Failed"))
+          assert_selector("span.bg-red-50", text: "Failed")
+        end
       end
     end
   RUBY
 
-  create_test "components/flash_component_test.rb", <<~'RUBY'
+  create_test "components/admin/flash_component_test.rb", <<~'RUBY'
     require "test_helper"
 
-    class FlashComponentTest < ViewComponent::TestCase
-      test "renders notice flash message" do
-        render_inline(FlashComponent.new(flash: { notice: "Success!" }))
-        assert_selector("[data-controller='flash']")
-        assert_text("Success!")
-        assert_selector(".border-green-400")
-      end
+    module Admin
+      class FlashComponentTest < ViewComponent::TestCase
+        test "renders notice flash message" do
+          render_inline(Admin::FlashComponent.new(flash: { notice: "Success!" }))
+          assert_selector("[data-controller='admin--flash']")
+          assert_text("Success!")
+          assert_selector(".border-green-400")
+        end
 
-      test "renders alert flash message" do
-        render_inline(FlashComponent.new(flash: { alert: "Warning!" }))
-        assert_selector(".border-yellow-400")
-        assert_text("Warning!")
-      end
+        test "renders alert flash message" do
+          render_inline(Admin::FlashComponent.new(flash: { alert: "Warning!" }))
+          assert_selector(".border-yellow-400")
+          assert_text("Warning!")
+        end
 
-      test "renders error flash message" do
-        render_inline(FlashComponent.new(flash: { error: "Error!" }))
-        assert_selector(".border-red-400")
-        assert_text("Error!")
-      end
+        test "renders error flash message" do
+          render_inline(Admin::FlashComponent.new(flash: { error: "Error!" }))
+          assert_selector(".border-red-400")
+          assert_text("Error!")
+        end
 
-      test "does not render when flash is empty" do
-        render_inline(FlashComponent.new(flash: {}))
-        assert_no_selector("[data-controller='flash']")
-      end
+        test "does not render when flash is empty" do
+          render_inline(Admin::FlashComponent.new(flash: {}))
+          assert_no_selector("[data-controller='admin--flash']")
+        end
 
-      test "renders dismiss button" do
-        render_inline(FlashComponent.new(flash: { notice: "Test" }))
-        assert_selector("button[data-action='click->flash#dismiss']")
+        test "renders dismiss button" do
+          render_inline(Admin::FlashComponent.new(flash: { notice: "Test" }))
+          assert_selector("button[data-action='click->admin--flash#dismiss']")
+        end
       end
     end
   RUBY
 
-  create_test "components/modal_component_test.rb", <<~'RUBY'
+  create_test "components/admin/modal_component_test.rb", <<~'RUBY'
     require "test_helper"
 
-    class ModalComponentTest < ViewComponent::TestCase
-      test "renders modal with trigger and body" do
-        render_inline(ModalComponent.new) do |modal|
-          modal.with_trigger { "Open" }
-          modal.with_body { "Modal content" }
+    module Admin
+      class ModalComponentTest < ViewComponent::TestCase
+        test "renders modal with trigger and body" do
+          render_inline(Admin::ModalComponent.new) do |modal|
+            modal.with_trigger { "Open" }
+            modal.with_body { "Modal content" }
+          end
+          assert_selector("[data-controller='admin--modal']")
+          assert_selector("[data-action='click->admin--modal#open']", text: "Open")
+          assert_selector("[data-admin--modal-target='dialog']")
+          assert_text("Modal content")
         end
-        assert_selector("[data-controller='modal']")
-        assert_selector("[data-action='click->modal#open']", text: "Open")
-        assert_selector("[data-modal-target='dialog']")
-        assert_text("Modal content")
-      end
 
-      test "renders close button" do
-        render_inline(ModalComponent.new) do |modal|
-          modal.with_body { "Content" }
+        test "renders close button" do
+          render_inline(Admin::ModalComponent.new) do |modal|
+            modal.with_body { "Content" }
+          end
+          assert_selector("button[data-action='click->admin--modal#close']")
         end
-        assert_selector("button[data-action='click->modal#close']")
-      end
 
-      test "dialog has backdrop click handler" do
-        render_inline(ModalComponent.new) do |modal|
-          modal.with_body { "Content" }
+        test "dialog has backdrop click handler" do
+          render_inline(Admin::ModalComponent.new) do |modal|
+            modal.with_body { "Content" }
+          end
+          assert_selector("[data-action='click->admin--modal#closeOnBackdrop']")
         end
-        assert_selector("[data-action='click->modal#closeOnBackdrop']")
       end
     end
   RUBY
 
-  create_test "components/dropdown_component_test.rb", <<~'RUBY'
+  create_test "components/admin/dropdown_component_test.rb", <<~'RUBY'
     require "test_helper"
 
-    class DropdownComponentTest < ViewComponent::TestCase
-      test "renders dropdown with trigger and items" do
-        render_inline(DropdownComponent.new) do |dropdown|
-          dropdown.with_trigger { "Menu" }
-          dropdown.with_item { "Item 1" }
-          dropdown.with_item { "Item 2" }
+    module Admin
+      class DropdownComponentTest < ViewComponent::TestCase
+        test "renders dropdown with trigger and items" do
+          render_inline(Admin::DropdownComponent.new) do |dropdown|
+            dropdown.with_trigger { "Menu" }
+            dropdown.with_item { "Item 1" }
+            dropdown.with_item { "Item 2" }
+          end
+          assert_selector("[data-controller='admin--dropdown']")
+          assert_selector("[data-action='click->admin--dropdown#toggle']", text: "Menu")
+          assert_selector("[data-admin--dropdown-target='menu']")
+          assert_text("Item 1")
+          assert_text("Item 2")
         end
-        assert_selector("[data-controller='dropdown']")
-        assert_selector("[data-action='click->dropdown#toggle']", text: "Menu")
-        assert_selector("[data-dropdown-target='menu']")
-        assert_text("Item 1")
-        assert_text("Item 2")
-      end
 
-      test "menu has role=menu attribute" do
-        render_inline(DropdownComponent.new) do |dropdown|
-          dropdown.with_trigger { "Menu" }
+        test "menu has role=menu attribute" do
+          render_inline(Admin::DropdownComponent.new) do |dropdown|
+            dropdown.with_trigger { "Menu" }
+          end
+          assert_selector("[role='menu']")
         end
-        assert_selector("[role='menu']")
       end
     end
   RUBY
 
-  create_test "components/form_field_component_test.rb", <<~'RUBY'
+  create_test "components/admin/form_field_component_test.rb", <<~'RUBY'
     require "test_helper"
 
-    class FormFieldComponentTest < ViewComponent::TestCase
-      setup do
-        @user = User.new
-      end
-
-      test "renders text field with label" do
-        with_rendered_component do
-          assert_selector("label", text: "Name")
-          assert_selector("input[type='text']")
+    module Admin
+      class FormFieldComponentTest < ViewComponent::TestCase
+        setup do
+          @user = User.new
         end
-      end
 
-      test "renders error messages" do
-        with_rendered_component(error_messages: [ "can't be blank" ]) do
-          assert_selector("p.text-red-600", text: "can't be blank")
+        test "renders text field with label" do
+          with_rendered_component do
+            assert_selector("label", text: "Name")
+            assert_selector("input[type='text']")
+          end
         end
-      end
 
-      private
-
-      def with_rendered_component(error_messages: nil, &block)
-        vc_test_controller.view_context.form_with(model: @user, url: "/test") do |form|
-          render_inline(FormFieldComponent.new(
-            form: form,
-            field_name: :email_address,
-            label: "Name",
-            error_messages: error_messages
-          ))
+        test "renders error messages" do
+          with_rendered_component(error_messages: [ "can't be blank" ]) do
+            assert_selector("p.text-red-600", text: "can't be blank")
+          end
         end
-        yield
+
+        private
+
+        def with_rendered_component(error_messages: nil, &block)
+          vc_test_controller.view_context.form_with(model: @user, url: "/test") do |form|
+            render_inline(Admin::FormFieldComponent.new(
+              form: form,
+              field_name: :email_address,
+              label: "Name",
+              error_messages: error_messages
+            ))
+          end
+          yield
+        end
       end
     end
   RUBY
 
-  create_test "components/empty_state_component_test.rb", <<~'RUBY'
+  create_test "components/admin/empty_state_component_test.rb", <<~'RUBY'
     require "test_helper"
 
-    class EmptyStateComponentTest < ViewComponent::TestCase
-      test "renders message" do
-        render_inline(EmptyStateComponent.new(message: "No items found"))
-        assert_text("No items found")
-        assert_selector("div.text-center")
-      end
-
-      test "renders icon slot" do
-        render_inline(EmptyStateComponent.new(message: "Empty")) do |empty|
-          empty.with_icon { "<svg>icon</svg>".html_safe }
+    module Admin
+      class EmptyStateComponentTest < ViewComponent::TestCase
+        test "renders message" do
+          render_inline(Admin::EmptyStateComponent.new(message: "No items found"))
+          assert_text("No items found")
+          assert_selector("div.text-center")
         end
-        assert_selector("svg")
-      end
 
-      test "renders action slot" do
-        render_inline(EmptyStateComponent.new(message: "Empty")) do |empty|
-          empty.with_action { "Add new" }
+        test "renders icon slot" do
+          render_inline(Admin::EmptyStateComponent.new(message: "Empty")) do |empty|
+            empty.with_icon { "<svg>icon</svg>".html_safe }
+          end
+          assert_selector("svg")
         end
-        assert_text("Add new")
+
+        test "renders action slot" do
+          render_inline(Admin::EmptyStateComponent.new(message: "Empty")) do |empty|
+            empty.with_action { "Add new" }
+          end
+          assert_text("Add new")
+        end
       end
     end
   RUBY
 
-  create_test "components/pagination_component_test.rb", <<~'RUBY'
+  create_test "components/admin/pagination_component_test.rb", <<~'RUBY'
     require "test_helper"
 
-    class PaginationComponentTest < ViewComponent::TestCase
-      test "renders pagination when multiple pages" do
-        mock_request = Struct.new(:params, :base_url, :path, :query_string)
-                             .new({}, "http://test.com", "/test", "")
-        pagy = Pagy::Offset.new(count: 100, page: 1, limit: 10, request: mock_request)
-        render_inline(PaginationComponent.new(pagy: pagy))
-        assert_selector("nav[aria-label='Pagination']")
-      end
+    module Admin
+      class PaginationComponentTest < ViewComponent::TestCase
+        test "renders pagination when multiple pages" do
+          mock_request = Struct.new(:params, :base_url, :path, :query_string)
+                               .new({}, "http://test.com", "/test", "")
+          pagy = Pagy::Offset.new(count: 100, page: 1, limit: 10, request: mock_request)
+          render_inline(Admin::PaginationComponent.new(pagy: pagy))
+          assert_selector("nav[aria-label='Pagination']")
+        end
 
-      test "does not render when single page" do
-        pagy = Pagy::Offset.new(count: 5, page: 1, limit: 10)
-        render_inline(PaginationComponent.new(pagy: pagy))
-        assert_no_selector("nav")
+        test "does not render when single page" do
+          pagy = Pagy::Offset.new(count: 5, page: 1, limit: 10)
+          render_inline(Admin::PaginationComponent.new(pagy: pagy))
+          assert_no_selector("nav")
+        end
       end
     end
   RUBY
 
-  create_test "components/navbar_component_test.rb", <<~'RUBY'
+  create_test "components/admin/navbar_component_test.rb", <<~'RUBY'
     require "test_helper"
 
-    class NavbarComponentTest < ViewComponent::TestCase
-      test "renders navbar with login links when no user" do
-        render_inline(NavbarComponent.new(user: nil))
-        assert_selector("nav[data-controller='navbar']")
-        assert_selector("a", text: I18n.t("defaults.navigation.login"))
-        assert_selector("a", text: I18n.t("defaults.navigation.signup"))
-      end
+    module Admin
+      class NavbarComponentTest < ViewComponent::TestCase
+        test "renders navbar with login links when no user" do
+          render_inline(Admin::NavbarComponent.new(user: nil))
+          assert_selector("nav[data-controller='admin--navbar']")
+          assert_selector("a", text: I18n.t("defaults.navigation.login"))
+          assert_selector("a", text: I18n.t("defaults.navigation.signup"))
+        end
 
-      test "renders navbar with logout when user present" do
-        user = users(:regular)
-        render_inline(NavbarComponent.new(user: user))
-        assert_text(I18n.t("defaults.navigation.logout"))
-        assert_text(I18n.t("defaults.navigation.dashboard"))
-      end
+        test "renders navbar with logout when user present" do
+          user = users(:regular)
+          render_inline(Admin::NavbarComponent.new(user: user))
+          assert_text(I18n.t("defaults.navigation.logout"))
+          assert_text(I18n.t("defaults.navigation.dashboard"))
+        end
 
-      test "renders mobile hamburger button" do
-        render_inline(NavbarComponent.new)
-        assert_selector("button[data-action='click->navbar#toggle']")
-        assert_selector("[data-navbar-target='menu']")
+        test "renders mobile hamburger button" do
+          render_inline(Admin::NavbarComponent.new)
+          assert_selector("button[data-action='click->admin--navbar#toggle']")
+          assert_selector("[data-admin--navbar-target='menu']")
+        end
       end
     end
   RUBY
